@@ -76,7 +76,14 @@ def need_reference_policy(
     config: DictConfig,
 ) -> bool:
     """Given the config, do we need ref policy."""
-    return config.algorithm.get("use_kl_in_reward", False) or config.actor_rollout_ref.actor.use_kl_loss
+    if config.algorithm.get("use_kl_in_reward", False) or config.actor_rollout_ref.actor.use_kl_loss:
+        return True
+    # ReVal's Bellman-residual loss consumes ref_log_prob directly, so the ref
+    # policy is required even when neither use_kl_in_reward nor use_kl_loss is set.
+    policy_loss = config.actor_rollout_ref.actor.get("policy_loss", None)
+    if policy_loss is not None and policy_loss.get("loss_mode") == "reval":
+        return True
+    return False
 
 
 def need_teacher_policy(

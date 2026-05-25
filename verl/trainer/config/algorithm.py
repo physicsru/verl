@@ -667,3 +667,18 @@ class AlgoConfig(BaseConfig):
     # gdpo_reward_weights: per-dimension weights for aggregation (default: equal weights).
     gdpo_reward_keys: Optional[list[str]] = None
     gdpo_reward_weights: Optional[list[float]] = None
+    # ReVal: Off-Policy Value-Based RL for LLMs (arXiv:2603.23355).
+    # - reval_beta scales the rule reward inside the trajectory-level Bellman residual.
+    # - reval_normalize_reward subtracts the group mean from r(τ) before scaling.
+    # - reval_updates_per_iter (K) is the number of gradient passes over each fresh batch
+    #   (paper uses the FIFO replay buffer; this prototype runs K epochs on the current batch).
+    # - reval_ref_reset_freq sets π_ref ← π_θ every N global steps; 0 disables the reset.
+    #   The paper recommends 200; this prototype defaults to 0 because the in-place
+    #   FSDP/Megatron ref-weight sync is left as an extension point (see main_reval.py).
+    reval_beta: float = 0.002
+    reval_normalize_reward: bool = True
+    reval_updates_per_iter: int = 2
+    reval_ref_reset_freq: int = 0
+    # FIFO replay buffer capacity for the off-policy half of ReVal's K=2 schedule.
+    # Paper: 5120 (= 5 × M_prompts × N_rollouts at default 128 × 8).
+    reval_buffer_size: int = 5120

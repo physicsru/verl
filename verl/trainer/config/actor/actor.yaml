@@ -75,6 +75,10 @@ policy_loss:
   # KL divergence penalty coefficient
   ppo_kl_coef: 0.1
 
+  # ReVal: beta used to scale r(tau) in the trajectory-level Bellman residual
+  # Ignored unless loss_mode='reval'.
+  reval_beta: 0.002
+
 # Constant C in Dual-clip PPO; clips when advantage < 0 and ratio > C
 clip_ratio_c: 3.0
 

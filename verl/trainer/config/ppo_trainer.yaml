@@ -109,6 +109,22 @@ algorithm:
     # Power used for weight scaling in "pow" method
     weight_pow: 2.0
 
+  # ReVal: scale applied to r(tau) inside the trajectory-level Bellman residual
+  reval_beta: 0.002
+
+  # ReVal: subtract per-group mean from r(tau) before scaling by beta
+  reval_normalize_reward: true
+
+  # ReVal: K updates per fresh batch (paper uses K=2 via FIFO replay)
+  reval_updates_per_iter: 2
+
+  # ReVal: sync pi_ref <- pi_theta every N global steps (0 disables)
+  reval_ref_reset_freq: 0
+
+  # ReVal: FIFO replay buffer capacity for the off-policy half of K=2.
+  # Paper: 5120 (~5 fresh batches at default M=128, N=8).
+  reval_buffer_size: 5120
+
 # config for the trainer
 trainer:
 

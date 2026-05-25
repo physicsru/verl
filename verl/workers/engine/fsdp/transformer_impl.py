@@ -1059,12 +1059,20 @@ class FSDPEngineWithLMHead(FSDPEngine):
         calculate_sum_pi_squared = tu.get_non_tensor_data(
             data=micro_batch, key="calculate_sum_pi_squared", default=False
         )
+        calculate_init_state_value = tu.get_non_tensor_data(
+            data=micro_batch, key="calculate_init_state_value", default=False
+        )
         distillation_use_topk = tu.get_non_tensor_data(data=micro_batch, key="distillation_use_topk", default=False)
 
         if calculate_sum_pi_squared and use_fused_kernels:
             raise NotImplementedError(
                 "calculate_sum_pi_squared=True is not supported with use_fused_kernels=True: "
                 "fused kernels do not materialize the full logits tensor needed for Σπ²."
+            )
+        if calculate_init_state_value and use_fused_kernels:
+            raise NotImplementedError(
+                "calculate_init_state_value=True (ReVal) is not supported with use_fused_kernels=True: "
+                "fused kernels do not materialize logits needed for the log-partition V(s)."
             )
 
         model_output = {}
@@ -1106,6 +1114,13 @@ class FSDPEngineWithLMHead(FSDPEngine):
                 if calculate_sum_pi_squared:
                     sum_pi_squared_rmpad = verl_F.calculate_sum_pi_squared_from_logits(logits_rmpad)
 
+                # compute per-token log-partition V(s) = logsumexp_a Q(s, a) for ReVal.
+                # The autoregressive convention is that logits at position t parameterise
+                # the distribution over the (t+1)-th token; therefore the logsumexp at
+                # position t is V(s_{t+1}). The first response token's value is V(s_1).
+                if calculate_init_state_value:
+                    init_state_value_rmpad = torch.logsumexp(logits_rmpad, dim=-1)
+
                 # logits_processor_func return tensors with shape (1, total_nnz/sp_size)
                 if distillation_use_topk:
                     outputs = logits_processor_func(student_logits=logits_rmpad.unsqueeze(0), data=micro_batch)
@@ -1143,6 +1158,13 @@ class FSDPEngineWithLMHead(FSDPEngine):
                         unpad_dim=0,
                         padding_size=pad_size,
                     )
+                if calculate_init_state_value:
+                    init_state_value_rmpad = gather_outputs_and_unpad(
+                        init_state_value_rmpad,
+                        gather_dim=0,
+                        unpad_dim=0,
+                        padding_size=pad_size,
+                    )
 
             if pad_mode == DatasetPadMode.NO_PADDING:
                 cu_seqlens = input_ids.offsets()
@@ -1152,6 +1174,8 @@ class FSDPEngineWithLMHead(FSDPEngine):
                     entropy = torch.nested.nested_tensor_from_jagged(entropy_rmpad, cu_seqlens)
                 if calculate_sum_pi_squared:
                     sum_pi_squared = torch.nested.nested_tensor_from_jagged(sum_pi_squared_rmpad, cu_seqlens)
+                if calculate_init_state_value:
+                    init_state_value = torch.nested.nested_tensor_from_jagged(init_state_value_rmpad, cu_seqlens)
             else:
                 raise NotImplementedError(f"pad_mode {pad_mode} not implemented")
 
@@ -1175,6 +1199,9 @@ class FSDPEngineWithLMHead(FSDPEngine):
 
                 if calculate_sum_pi_squared:
                     sum_pi_squared = verl_F.calculate_sum_pi_squared_from_logits(logits)
+
+                if calculate_init_state_value:
+                    init_state_value = torch.logsumexp(logits, dim=-1)
 
                 if pad_mode == DatasetPadMode.NO_PADDING:
                     cu_seqlens = input_ids.offsets()
@@ -1211,6 +1238,14 @@ class FSDPEngineWithLMHead(FSDPEngine):
                         )
                         sum_pi_squared_rmpad = torch.cat([t for t in sum_pi_squared.unbind()])
                         sum_pi_squared = torch.nested.nested_tensor_from_jagged(sum_pi_squared_rmpad, cu_seqlens)
+                    if calculate_init_state_value:
+                        init_state_value = torch.nested.narrow(
+                            init_state_value, 1, starts, seq_lengths, layout=torch.jagged
+                        )
+                        init_state_value_rmpad = torch.cat([t for t in init_state_value.unbind()])
+                        init_state_value = torch.nested.nested_tensor_from_jagged(
+                            init_state_value_rmpad, cu_seqlens
+                        )
                 else:
                     raise NotImplementedError(f"pad_mode {pad_mode} not implemented")
 
@@ -1219,6 +1254,8 @@ class FSDPEngineWithLMHead(FSDPEngine):
             model_output["entropy"] = entropy
         if calculate_sum_pi_squared:
             model_output["sum_pi_squared"] = sum_pi_squared
+        if calculate_init_state_value:
+            model_output["init_state_value"] = init_state_value
 
         return model_output
 

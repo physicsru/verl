@@ -56,7 +56,18 @@ def default_compute_score(
 
         # from . import math_verify
         # res = math_verify.compute_score(solution_str, ground_truth)
-    elif data_source in ["math_dapo", "math", "math_dapo_reasoning"] or data_source.startswith("aime"):
+    elif data_source in ["agentica-org/DeepScaleR-Preview-Dataset"] or data_source.startswith("aime"):
+        # ReVal reproduction: prompts request \boxed{} answers and the paper uses
+        # a 0/1 verifiable reward. math_verify parses both LaTeX (\boxed{...}) and
+        # plain expressions, then checks symbolic equivalence via sympy, so it
+        # correctly scores DeepScaleR/AIME responses with the prompt format used
+        # in examples/data_preprocess/deepscaler.py. math_dapo's default
+        # is_correct_minerva uses an "Answer: <x>" regex that never matches
+        # \boxed{} output (collapsing every reward to -1).
+        from . import math_verify
+
+        res = math_verify.compute_score(solution_str, ground_truth)
+    elif data_source in ["math_dapo", "math", "math_dapo_reasoning"]:
         from . import math_dapo
 
         res = math_dapo.compute_score(solution_str, ground_truth)

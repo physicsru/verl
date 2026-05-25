@@ -1,0 +1,18 @@
+{
+  "data_source": "agentica-org/DeepScaleR-Preview-Dataset",
+  "prompt": [
+    {
+      "role": "user",
+      "content": "The operation $\\otimes$ is defined for all nonzero numbers by $a \\otimes b = \\frac{a^{2}}{b}$. Determine $[(1 \\otimes 2) \\otimes 3] - [1 \\otimes (2 \\otimes 3)]$. Let's think step by step and output the final answer within \\boxed{}."
+    }
+  ],
+  "ability": "math",
+  "reward_model": {
+    "style": "rule",
+    "ground_truth": "-\\frac{2}{3}"
+  },
+  "extra_info": {
+    "split": "train",
+    "index": 0
+  }
+}

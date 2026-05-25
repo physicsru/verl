@@ -108,6 +108,7 @@ class AdvantageEstimator(str, Enum):
     OPTIMAL_TOKEN_BASELINE = "optimal_token_baseline"
     TIR_OPTIMAL_TOKEN_BASELINE = "tir_optimal_token_baseline"
     GDPO = "gdpo"
+    REVAL = "reval"
 
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}
@@ -2485,3 +2486,135 @@ def compute_policy_loss_bypass_mode(
     pg_metrics.update(rollout_metrics)
 
     return pg_loss, pg_metrics
+
+
+# ---------------------------------------------------------------------------
+# ReVal: Off-Policy Value-Based RL for LLMs (arXiv:2603.23355, Wang et al., 2026)
+# ---------------------------------------------------------------------------
+
+
+@register_adv_est(AdvantageEstimator.REVAL)
+def compute_reval_outcome_advantage(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index: np.ndarray,
+    epsilon: float = 1e-6,
+    config: Optional[AlgoConfig] = None,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """ReVal trajectory reward.
+
+    Carries the per-trajectory scalar r(τ) (optionally group-mean-normalized) on
+    every response token so the downstream Bellman loss can recover it. The
+    paper reports that the group-normalized variant outperforms raw 0/1 and ±1
+    formulations (Section 5.5.4).
+    """
+    scores = token_level_rewards.sum(dim=-1)
+    normalize_reward = True if config is None else getattr(config, "reval_normalize_reward", True)
+
+    with torch.no_grad():
+        if normalize_reward:
+            id2score: dict[Any, list[torch.Tensor]] = defaultdict(list)
+            id2mean: dict[Any, torch.Tensor] = {}
+            bsz = scores.shape[0]
+            for i in range(bsz):
+                id2score[index[i]].append(scores[i])
+            for idx, group_scores in id2score.items():
+                if len(group_scores) == 1:
+                    id2mean[idx] = torch.tensor(0.0)
+                else:
+                    id2mean[idx] = torch.mean(torch.stack(group_scores))
+            for i in range(bsz):
+                scores[i] = scores[i] - id2mean[index[i]]
+        scores = scores.unsqueeze(-1) * response_mask
+
+    return scores, scores
+
+
+@register_policy_loss("reval")
+def compute_policy_loss_reval(
+    old_log_prob: torch.Tensor,
+    log_prob: torch.Tensor,
+    advantages: torch.Tensor,
+    response_mask: torch.Tensor,
+    loss_agg_mode: str = "token-mean",
+    config: Optional[ActorConfig] = None,
+    rollout_is_weights: torch.Tensor | None = None,
+    *,
+    ref_log_prob: torch.Tensor | None = None,
+    init_state_value: torch.Tensor | None = None,
+    ref_init_state_value: torch.Tensor | None = None,
+    reval_beta: float = 0.002,
+    **kwargs,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Trajectory-level Bellman residual loss for ReVal (Eq. 2 of the paper).
+
+    For each trajectory τ in the batch, computes
+        δ(τ) = V_θ(s_1) - V_ref(s_1) + Σ_h log π_θ(a_h|s_h)
+               - r(τ) / β - Σ_h log π_ref(a_h|s_h)
+    and returns the mean squared residual. V is the log-partition of the
+    logits at the position predicting the first response token, surfaced by
+    the engine as ``init_state_value`` (per-token; we read index 0 within
+    each response). ``advantages`` carries r(τ) broadcast over response
+    tokens, set by :func:`compute_reval_outcome_advantage`.
+
+    The PPO-style ``old_log_prob`` is unused (ReVal has no importance ratio
+    and no clip), kept only to satisfy the registered loss signature.
+    """
+    if ref_log_prob is None:
+        raise ValueError("ReVal loss requires ref_log_prob; enable reference policy and pass it through losses.py.")
+    if init_state_value is None or ref_init_state_value is None:
+        raise ValueError(
+            "ReVal loss requires init_state_value (current actor) and ref_init_state_value (reference). "
+            "Set ``calculate_init_state_value=True`` in the actor/ref forward extra_info."
+        )
+
+    response_mask_f = response_mask.float()
+    response_len = response_mask_f.sum(dim=-1).clamp(min=1.0)
+
+    # Sum of token-level log-probs across the response (trajectory log-probability).
+    sum_logp_theta = (log_prob * response_mask_f).sum(dim=-1)
+    sum_logp_ref = (ref_log_prob * response_mask_f).sum(dim=-1)
+
+    # Per-trajectory V_θ(s_1) and V_ref(s_1): logsumexp of logits at the prompt-final
+    # position, surfaced per-response-token by the engine. Index 0 is the position
+    # that predicts the first response token, which is exactly V(s_1).
+    if init_state_value.dim() == 2:
+        v_theta = init_state_value[:, 0]
+        v_ref = ref_init_state_value[:, 0]
+    else:
+        v_theta = init_state_value
+        v_ref = ref_init_state_value
+
+    # Recover scalar r(τ) from the advantages channel (broadcast over response tokens).
+    reward_traj = (advantages * response_mask_f).sum(dim=-1) / response_len
+
+    residual = v_theta - v_ref + sum_logp_theta - reward_traj / max(reval_beta, 1e-8) - sum_logp_ref
+
+    # Mean over trajectories. With dp_size > 1, the trainer's loss_scale_factor
+    # already accounts for batching across data-parallel ranks via SUM aggregation.
+    global_bsz = None
+    if config is not None:
+        gbi = getattr(config, "global_batch_info", {}) or {}
+        global_bsz = gbi.get("global_batch_size", None)
+        dp_size = gbi.get("dp_size", 1) or 1
+    else:
+        dp_size = 1
+
+    sq = residual.pow(2)
+    if global_bsz is not None and dp_size > 1:
+        loss = sq.sum() / global_bsz * dp_size
+    else:
+        loss = sq.mean()
+
+    metrics = {
+        "reval/td_error_mean": residual.detach().mean(),
+        "reval/td_error_abs": residual.detach().abs().mean(),
+        "reval/V_theta": v_theta.detach().mean(),
+        "reval/V_ref": v_ref.detach().mean(),
+        "reval/V_gap": (v_theta - v_ref).detach().mean(),
+        "reval/sum_logp_theta": sum_logp_theta.detach().mean(),
+        "reval/sum_logp_ref": sum_logp_ref.detach().mean(),
+        "reval/reward_over_beta": (reward_traj / max(reval_beta, 1e-8)).detach().mean(),
+    }
+    return loss, metrics

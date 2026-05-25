@@ -61,6 +61,15 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
     if entropy is not None:
         entropy = no_padding_2_padding(entropy, data)
 
+    loss_mode = config.policy_loss.get("loss_mode", "vanilla")
+    is_reval = loss_mode == "reval"
+
+    # ReVal needs the actor's V_θ(s_1) at the current weights, surfaced as
+    # ``init_state_value`` per response token by the engine's forward pass.
+    init_state_value = model_output.get("init_state_value", None)
+    if init_state_value is not None:
+        init_state_value = no_padding_2_padding(init_state_value, data)
+
     # global batch info for loss aggregation
     config.global_batch_info["dp_size"] = data["dp_size"]
     config.global_batch_info["batch_num_tokens"] = data["batch_num_tokens"]
@@ -88,6 +97,8 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
         fields.append("rollout_is_weights")
     if "ref_log_prob" in data:
         fields.append("ref_log_prob")
+    if is_reval and "ref_init_state_value" in data:
+        fields.append("ref_init_state_value")
     data = data.select(*fields).to_padded_tensor()
 
     response_mask = data["response_mask"].to(bool)
@@ -98,9 +109,19 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
 
     loss_agg_mode = config.loss_agg_mode
 
-    loss_mode = config.policy_loss.get("loss_mode", "vanilla")
-
     policy_loss_fn = get_policy_loss_fn(loss_mode)
+    extra_loss_kwargs: dict = {}
+    if is_reval:
+        if "ref_log_prob" not in data:
+            raise ValueError(
+                "ReVal loss requires ref_log_prob; enable the reference policy "
+                "(actor_rollout_ref.actor.use_kl_loss=true or use_ref=true)."
+            )
+        extra_loss_kwargs["ref_log_prob"] = data["ref_log_prob"]
+        extra_loss_kwargs["init_state_value"] = init_state_value
+        extra_loss_kwargs["ref_init_state_value"] = data.get("ref_init_state_value", None)
+        extra_loss_kwargs["reval_beta"] = float(config.policy_loss.get("reval_beta", 0.002))
+
     pg_loss, pg_metrics = policy_loss_fn(
         old_log_prob=old_log_prob,
         log_prob=log_prob,
@@ -109,6 +130,7 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
         loss_agg_mode=loss_agg_mode,
         config=config,
         rollout_is_weights=rollout_is_weights,
+        **extra_loss_kwargs,
     )
 
     # AggregationType.MEAN for pg metrics: assumes policy_loss_fn normalizes by local_bsz/local_tokens
@@ -119,8 +141,10 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
     metrics["actor/pg_loss"] = Metric(value=pg_loss, aggregation=metric_aggregation)
     policy_loss = pg_loss
 
-    # add entropy loss
-    if entropy is not None:
+    # add entropy loss. ReVal's Bellman residual is a self-contained objective —
+    # entropy and explicit KL regularisation are absorbed into the V/log π terms,
+    # so we skip both add-ons for that loss_mode.
+    if entropy is not None and not is_reval:
         entropy_loss = agg_loss(
             loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode, **config.global_batch_info
         )
@@ -129,7 +153,7 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
         metrics["actor/entropy_loss"] = Metric(value=entropy_loss, aggregation=metric_aggregation)
 
     # add kl loss
-    if config.use_kl_loss:
+    if config.use_kl_loss and not is_reval:
         ref_log_prob = data["ref_log_prob"]
         # compute kl loss
         kld = kl_penalty(logprob=log_prob, ref_logprob=ref_log_prob, kl_penalty=config.kl_loss_type)

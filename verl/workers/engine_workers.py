@@ -206,10 +206,22 @@ class TrainingWorker(Worker, DistProfilerExtension):
         if lr is not None:
             final_metrics["lr"] = lr
 
-        # log memory
-        final_metrics["perf/max_memory_allocated_gb"] = get_torch_device().max_memory_allocated() / (1024**3)
-        final_metrics["perf/max_memory_reserved_gb"] = get_torch_device().max_memory_reserved() / (1024**3)
-        final_metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (1024**3)
+        # log memory: take the max across the DP group so every rank reports the same
+        # scalar. We can't go through the allgather path above because (a) downstream
+        # BatchMeta.concat in the inference path strictly requires identical
+        # extra_info["metrics"] across worker chunks, and (b) the train_mini_batch
+        # flattener (`chain.from_iterable(val)`) expects per-key values to be either
+        # lists-of-lists or singletons, not lists of scalars.
+        mem_stats = {
+            "perf/max_memory_allocated_gb": get_torch_device().max_memory_allocated() / (1024**3),
+            "perf/max_memory_reserved_gb": get_torch_device().max_memory_reserved() / (1024**3),
+            "perf/cpu_memory_used_gb": psutil.virtual_memory().used / (1024**3),
+        }
+        if dp_group is not None:
+            mem_tensor = torch.tensor(list(mem_stats.values()), device=self.device_name)
+            torch.distributed.all_reduce(mem_tensor, op=torch.distributed.ReduceOp.MAX, group=dp_group)
+            mem_stats = dict(zip(mem_stats.keys(), mem_tensor.tolist()))
+        final_metrics.update(mem_stats)
 
         # TODO: confirm the mtp loss IS same across dp
         for k, v in final_metrics.items():
