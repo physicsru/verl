@@ -16,6 +16,7 @@ _BOXED_RE = re.compile(r"\\boxed\{([^}]*)\}")
 
 _print_lock = threading.Lock()
 _print_counter: dict[str, int] = {}
+_last_print_time: float = 0
 NUM_EXAMINE = int(os.environ.get("LENGTHGEN_NUM_EXAMINE", "3"))
 
 
@@ -28,14 +29,20 @@ def _extract_boxed_answer(text: str) -> str | None:
 
 
 def _maybe_print_sample(extra_info, solution_str, ground_truth, score_dict):
-    """Print first NUM_EXAMINE samples per (task, condition) for debugging."""
+    """Print first NUM_EXAMINE samples per (task, condition) per batch."""
     if NUM_EXAMINE <= 0:
         return
+    import time
+    global _last_print_time
     task = extra_info.get("task", "?")
     condition = extra_info.get("condition", "?")
     n = extra_info.get("n", "?")
     key = f"{task}_{condition}"
     with _print_lock:
+        now = time.time()
+        if now - _last_print_time > 30:
+            _print_counter.clear()
+        _last_print_time = now
         count = _print_counter.get(key, 0)
         if count >= NUM_EXAMINE:
             return

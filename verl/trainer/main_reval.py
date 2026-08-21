@@ -27,11 +27,15 @@ This module wires ReVal into verl by subclassing the synchronous PPO trainer:
   which is persisted on the TransferQueue as ``ref_init_state_value``;
 - the actor's training forward also emits ``init_state_value``, consumed by the
   registered ``reval`` policy loss in :mod:`verl.trainer.ppo.core_algos`;
-- ``actor_rollout_ref.actor.ppo_epochs`` controls K updates per fresh batch
-  (paper's K=2). A persistent across-iteration FIFO replay buffer is left as an
-  extension point — see the README under ``examples/reval_trainer/``.
-- π_ref ← π_θ resets every ``algorithm.reval_ref_reset_freq`` global steps. This
-  prototype skips the actual weight sync (logs a warning); see ``_reset_reference_policy``.
+- K=2 updates per fresh batch are realised structurally by the fit loop: 1
+  on-policy update + 1 off-policy update sampled from a persistent cross-iteration
+  FIFO replay buffer (``RevalReplayBuffer``, paper M=5120). ``actor.ppo_epochs`` is
+  forced to 1 — see ``_force_reval_config`` and the README under
+  ``examples/reval_trainer/``.
+- π_ref ← π_θ resets every ``algorithm.reval_ref_reset_freq`` global steps via an
+  in-memory actor→ref weight copy (``sync_ref_with_actor`` worker RPC), after which
+  the replay buffer is flushed; see ``_reset_reference_policy``. Disabled by default
+  (freq=0), which is paper-faithful for the headline 1.5B run.
 """
 
 import copy
@@ -198,19 +202,72 @@ class RevalTrainer(PPOTrainer):
         batch.extra_info["calculate_init_state_value"] = True
         return super()._update_actor(batch, metrics)
 
-    def _reset_reference_policy(self) -> None:
-        """Optionally sync π_ref ← π_θ. Prototype: log-only.
+    def _reset_reference_policy(self, keep_keys=None) -> None:
+        """Sync π_ref ← π_θ in memory, then flush the replay buffer (paper §5.5.2).
 
-        Real implementations should gather the actor's FSDP-sharded state dict
-        and load it into the reference engine. The cheapest faithful path is a
-        round-trip through ``actor_rollout_wg.save_checkpoint`` then
-        ``ref_policy_wg.load_checkpoint``; in production you would replace this
-        with an in-memory broadcast to avoid the disk cost every N steps.
+        The actor's current weights are copied into the reference engine via the
+        ``sync_ref_with_actor`` worker RPC (both engines are colocated, so the copy
+        is local to each rank — no disk round-trip). The FIFO buffer is then flushed
+        because every buffered trajectory's cached ``ref_log_prob`` /
+        ``ref_init_state_value`` was computed against the *old* reference and would
+        otherwise feed stale Bellman targets into subsequent off-policy updates.
+
+        ``keep_keys`` are the current step's fresh-batch keys: they are removed from
+        the buffer but their TransferQueue entries are NOT cleared here, because the
+        parent ``fit`` still reads them (``_compute_metrics`` / ``_log_rollout_data``)
+        after ``step()`` returns and clears them itself at end of step.
+
+        Set ``REVAL_VERIFY_REF_RESET=1`` to assert π_ref ≡ π_θ right after the copy
+        (Calibrated Initialization, Proposition 2) — recommended on a short run.
         """
-        logger.warning(
-            "[reval] reval_ref_reset_freq>0 was requested but reference-policy "
-            "reset is not wired through this prototype. Set freq=0 or implement "
-            "_reset_reference_policy() with an actor→ref weight sync."
+        if getattr(self, "ref_in_actor", False):
+            # ref = actor-with-adapter-off (LoRA): the base is already the frozen
+            # anchor; a reset would be both meaningless and corrupting.
+            logger.info("[reval] ref_in_actor=True; skipping pi_ref reset.")
+            return
+        verify = os.getenv("REVAL_VERIFY_REF_RESET", "0") == "1"
+        t0 = time.time()
+        self.actor_rollout_wg.sync_ref_with_actor(verify=verify)
+        self._reval_flush_buffer(keep_keys=keep_keys)
+        logger.info(f"[reval] pi_ref <- pi_theta at step {self.global_steps} ({time.time() - t0:.1f}s)")
+
+    def _reval_flush_buffer(self, keep_keys=None) -> None:
+        """Drop all buffered trajectories and free their TransferQueue keys.
+
+        Runs right after a reference reset so no off-policy update reuses Bellman
+        targets anchored to the old reference. Correctness is preserved; the only
+        cost is a few steps of pure on-policy updates while the FIFO refills (the
+        off-policy sample returns ``None`` until the buffer is warm again).
+
+        ``keep_keys`` (the current step's fresh batch) are emptied from the buffer
+        but NOT ``tq.kv_clear``-ed here: the parent ``fit`` still reads them in
+        ``_compute_metrics`` / ``_log_rollout_data`` and clears them itself at end of
+        step. Clearing them here would yank the current step's data out from under
+        those reads (ValueError: keys or partition were not found).
+        """
+        entries = self._reval_buffer.entries
+        if not entries:
+            return
+        keep = set(keep_keys or [])
+        by_partition: dict[str, list[str]] = {}
+        for k, _, pid in entries:
+            if k in keep:
+                continue
+            by_partition.setdefault(pid, []).append(k)
+        # Empty the buffer entirely — including the fresh batch, whose ref values
+        # are now stale too — so no stale-ref trajectory is ever replayed. ``fit``
+        # shadows ``tq.kv_clear`` to protect buffered keys, so emptying first lets
+        # the clears below (and the parent's end-of-step clear) actually drop keys.
+        self._reval_buffer.entries = []
+        n_cleared = 0
+        for pid, keys in by_partition.items():
+            tq.kv_clear(keys=keys, partition_id=pid)
+            self.replay_buffer.remove(pid, keys)
+            n_cleared += len(keys)
+        logger.info(
+            f"[reval] flushed replay buffer: {len(entries)} trajectories "
+            f"({n_cleared} cleared now, {len(entries) - n_cleared} kept for the "
+            f"parent's end-of-step cleanup) across {len(by_partition)} partition(s)"
         )
 
     def _reval_off_policy_update(self, metrics: dict, timing_raw: dict) -> None:
@@ -287,7 +344,10 @@ class RevalTrainer(PPOTrainer):
                     original_kv_clear(keys=ev_keys, partition_id=pid)
                     self.replay_buffer.remove(pid, ev_keys)
             if do_ref_reset and self.global_steps > 0 and self.global_steps % reset_freq == 0:
-                self._reset_reference_policy()
+                # Keep the fresh batch's keys alive: the parent fit() still reads them
+                # (_compute_metrics / _log_rollout_data) after step() returns and clears
+                # them itself. Clearing them in the flush would crash that read.
+                self._reset_reference_policy(keep_keys=batch.keys)
                 metrics["reval/ref_reset"] = 1
             return batch
 

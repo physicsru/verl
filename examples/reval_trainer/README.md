@@ -34,8 +34,9 @@ does not drift before any reward signal arrives.
 | Policy loss | `verl/trainer/ppo/core_algos.py` | New `@register_policy_loss("reval")` computing the squared Bellman residual |
 | Engine forward | `verl/workers/engine/fsdp/transformer_impl.py` | New `calculate_init_state_value` flag → emits `init_state_value` (logsumexp of logits per token) |
 | Loss dispatcher | `verl/workers/utils/losses.py` | Routes `V_θ`, `V_ref`, `ref_log_prob`, and β to the ReVal loss; suppresses the entropy/KL add-ons (absorbed in the Bellman residual) |
-| Trainer | `verl/trainer/main_reval.py` | `RevalTrainer(PPOTrainer)` injects `calculate_init_state_value` into the ref + actor forwards, persists `ref_init_state_value` on the TransferQueue, and adds a periodic ref-reset hook |
-| Config | `verl/trainer/config/algorithm.py` | `reval_beta`, `reval_normalize_reward`, `reval_updates_per_iter`, `reval_ref_reset_freq` |
+| Trainer | `verl/trainer/main_reval.py` | `RevalTrainer(PPOTrainer)` injects `calculate_init_state_value` into the ref + actor forwards, persists `ref_init_state_value` on the TransferQueue, runs the FIFO replay buffer (1 on-policy + 1 off-policy update/step), and performs the periodic π_ref ← π_θ reset |
+| Weight sync | `verl/workers/engine_workers.py`, `verl/workers/engine/fsdp/transformer_impl.py` | `sync_ref_with_actor` worker RPC + `FSDPEngine.load_per_tensor_param` (inverse of `get_per_tensor_param`) do the in-memory actor→ref copy for the reset |
+| Config | `verl/trainer/config/algorithm.py` | `reval_beta`, `reval_normalize_reward`, `reval_ref_reset_freq` (note: `reval_updates_per_iter` is unused — K=2 is structural) |
 
 The dataset and rollout plumbing (TransferQueue, vLLM, AgentLoop) are unchanged.
 
@@ -53,7 +54,8 @@ Defaults reproduce Section 5.1/5.3 of the paper:
 | Dataset | DeepScaleR | Section 5.1 |
 | `M_PROMPTS × ROLLOUT_N` | 128 × 8 = 1024 | Section 5.1 |
 | `REVAL_BETA` | 0.002 | Section 5.5.3 (≈5K-token responses) |
-| `REVAL_K` (`ppo_epochs`) | 2 | Section 4.3, Eq. 3 |
+| K (updates/step) | 2 = 1 on-policy + 1 off-policy (FIFO buffer) | Section 4.3, Eq. 3 |
+| `REVAL_REF_RESET_FREQ` | 0 (off; 200 for short-response models) | Section 5.5.2 |
 | Temperature | 1.0 | Section 5.1 |
 | `TOTAL_TRAINING_STEPS` | 650 | Section 5.1 |
 | Reward design | Group-mean-normalized | Section 5.5.4 (best variant) |
@@ -68,21 +70,25 @@ bash examples/reval_trainer/run_dpsk_r1_distill_1_5b_fsdp.sh
 
 ## Known gaps from the paper
 
-1. **In-place reference-policy reset (every 200 steps)** is not wired. The
-   `RevalTrainer._reset_reference_policy()` method logs a warning and returns;
-   `REVAL_REF_RESET_FREQ=0` is the default. To enable, implement an actor→ref
-   FSDP state-dict broadcast (the cheap path is a `save_checkpoint`/
-   `load_checkpoint` round-trip via `actor_rollout_wg` / `ref_policy_wg`; the
-   fast path is an in-memory rebroadcast). This matters most for short-response
-   models (Qwen2.5-Math-7B in Section 5.5.2); the headline 1.5B run still
-   reaches paper-comparable scores without it.
-2. **Persistent FIFO replay across iterations (M=5120)**. We approximate the
-   paper's `K=2` expected updates per trajectory by running `ppo_epochs=K` on
-   each fresh batch — same per-trajectory gradient budget, but no mixing across
-   iteration boundaries. Verl's `ReplayBuffer` is a TransferQueue-coupled
-   synchronization primitive, not a trajectory store, so a faithful M=5120
-   replay needs a new buffer plus changes to the `step()` loop in
-   `verl/trainer/main_ppo_sync.py`.
+1. **In-place reference-policy reset (every 200 steps)** is wired.
+   `RevalTrainer._reset_reference_policy()` copies the actor weights into the
+   reference engine in memory via the `sync_ref_with_actor` worker RPC (both
+   engines are colocated, so the copy is local to each rank — no disk
+   round-trip), then flushes the FIFO buffer (cached `ref_log_prob` /
+   `ref_init_state_value` were computed against the *old* reference). It is
+   **disabled by default** (`REVAL_REF_RESET_FREQ=0`), which is paper-faithful
+   for the headline 1.5B run; set `REVAL_REF_RESET_FREQ=200` for short-response
+   models (Qwen2.5-Math-7B in Section 5.5.2). Set `REVAL_VERIFY_REF_RESET=1` to
+   assert π_ref ≡ π_θ right after each reset (Calibrated Initialization,
+   Proposition 2) — recommended once on a short run. The buffer is flushed
+   rather than ref-value-refreshed: correct, but it costs a few steps of pure
+   on-policy updates while the FIFO refills (refresh is a possible follow-up).
+2. **Persistent FIFO replay across iterations (M=5120)** is implemented:
+   `RevalReplayBuffer` is a real cross-iteration FIFO over TransferQueue keys.
+   Each step runs `K=2` updates structurally — 1 on-policy on the fresh batch +
+   1 off-policy sampled uniformly from the buffer — and `actor.ppo_epochs` is
+   forced to 1 (K does **not** come from `ppo_epochs`). The `fit()` loop keeps
+   buffered keys alive across iterations by shadowing `tq.kv_clear`.
 3. **Fused-kernel forward** is rejected when `calculate_init_state_value=True`
    because fused kernels don't materialize logits. Disable fused kernels (the
    verl default for FSDP is already non-fused).

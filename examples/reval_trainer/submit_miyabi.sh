@@ -118,6 +118,9 @@ export TRAIN_FILE=${TRAIN_FILE:-/work/go39/b20033/code/generalization/verl/data/
 export TEST_FILE=${TEST_FILE:-/work/go39/b20033/code/generalization/verl/data/deepscaler/test.parquet}
 export EXPERIMENT_NAME=${EXPERIMENT_NAME:-dpsk_r1_distill_1_5b_deepscaler}
 export PROJECT_NAME=${PROJECT_NAME:-verl_reval}
+# Which run script the head rank executes — override to launch an ablation variant
+# (e.g. run_dpsk_r1_distill_1_5b_fsdp_reset9.sh). Path is relative to the repo root.
+export RUN_SCRIPT=${RUN_SCRIPT:-examples/reval_trainer/run_dpsk_r1_distill_1_5b_fsdp.sh}
 
 # Paper knobs — keep aligned with examples/reval_trainer/run_dpsk_r1_distill_1_5b_fsdp.sh
 export M_PROMPTS=${M_PROMPTS:-128}
@@ -130,8 +133,10 @@ export MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
 export MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-7168}
 export ACTOR_LR=${ACTOR_LR:-1e-6}
 export REVAL_BETA=${REVAL_BETA:-0.002}
-export REVAL_K=${REVAL_K:-2}
+# K=2 is structural (1 on-policy + 1 off-policy update/step); REVAL_K is no longer read.
 export REVAL_REF_RESET_FREQ=${REVAL_REF_RESET_FREQ:-0}
+# Set to 1 (short run only) to assert pi_ref == pi_theta right after each reset.
+export REVAL_VERIFY_REF_RESET=${REVAL_VERIFY_REF_RESET:-0}
 export REVAL_NORMALIZE_REWARD=${REVAL_NORMALIZE_REWARD:-True}
 # Paper: FIFO replay buffer of 5120 trajectories (off-policy half of K=2).
 export REVAL_BUFFER_SIZE=${REVAL_BUFFER_SIZE:-5120}
@@ -172,7 +177,8 @@ mpirun --np "$NUM_NODES" \
     -x M_PROMPTS -x ROLLOUT_N -x PPO_MINI_BATCH_SIZE \
     -x PPO_MICRO_BATCH_SIZE_PER_GPU -x LOG_PROB_MICRO_BATCH_SIZE_PER_GPU \
     -x MAX_PROMPT_LENGTH -x MAX_RESPONSE_LENGTH -x ACTOR_LR \
-    -x REVAL_BETA -x REVAL_K -x REVAL_REF_RESET_FREQ -x REVAL_NORMALIZE_REWARD -x REVAL_BUFFER_SIZE \
+    -x REVAL_BETA -x REVAL_REF_RESET_FREQ -x REVAL_NORMALIZE_REWARD -x REVAL_BUFFER_SIZE \
+    -x REVAL_VERIFY_REF_RESET -x RUN_SCRIPT \
     -x ROLLOUT_TP -x ROLLOUT_GPU_MEM_UTIL -x ROLLOUT_TEMPERATURE \
     -x TEST_FREQ -x SAVE_FREQ -x TOTAL_TRAINING_STEPS -x TOTAL_EPOCHS \
     bash "${PBS_O_WORKDIR}/examples/reval_trainer/reval_per_node.sh"

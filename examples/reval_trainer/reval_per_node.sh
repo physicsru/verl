@@ -44,7 +44,7 @@ if [[ "${OMPI_COMM_WORLD_RANK}" == "$(( NUM_NODES - 1 ))" ]]; then
     # NNODES / NGPUS_PER_NODE come from the PBS allocation, not the run script's defaults.
     NNODES="${NUM_NODES}" \
     NGPUS_PER_NODE="${NUM_GPUS}" \
-    bash "${PBS_O_WORKDIR}/examples/reval_trainer/run_dpsk_r1_distill_1_5b_fsdp.sh"
+    bash "${PBS_O_WORKDIR}/${RUN_SCRIPT:-examples/reval_trainer/run_dpsk_r1_distill_1_5b_fsdp.sh}"
     HEAD_EXIT=$?
     echo "[${HOSTNAME}] trainer exited with ${HEAD_EXIT}"
     exit ${HEAD_EXIT}

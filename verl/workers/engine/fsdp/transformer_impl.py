@@ -857,6 +857,53 @@ class FSDPEngine(BaseEngine):
         peft_config_dict = peft_config.to_dict() if peft_config is not None else None
         return per_tensor_param, peft_config_dict
 
+    def load_per_tensor_param(self, per_tensor_param, strict: bool = False) -> None:
+        """Load a full (unsharded) parameter set into this sharded engine, in place.
+
+        Inverse of :meth:`get_per_tensor_param`. ``per_tensor_param`` is an iterable
+        of ``(name, full_tensor)`` pairs with the full tensors replicated on every
+        rank (exactly what ``get_per_tensor_param`` yields). Each rank reshards the
+        replicated state locally, so no rank0→all broadcast is required.
+
+        Used by ReVal's periodic reference reset (π_ref ← π_θ, arXiv:2603.23355
+        §5.5.2). Tensors are materialised on CPU first to bound the GPU peak — only
+        one full tensor is resident on device at a time during the gather; for very
+        large models a streaming variant would be a follow-up.
+        """
+        # Move to CPU as we consume the generator so we never hold the whole model
+        # on GPU. v.full_tensor() (inside the generator) is a collective, so every
+        # rank must consume in lockstep — guaranteed by the ONE_TO_ALL dispatch.
+        full_state = {name: (t.detach().cpu() if t.is_cuda else t) for name, t in per_tensor_param}
+
+        if self._is_offload_param:
+            load_fsdp_model_to_gpu(self.module)
+
+        if fsdp_version(self.module) == 2:
+            offload_policy = None
+            if self.engine_config.offload_policy or self.engine_config.forward_only:
+                offload_policy = CPUOffloadPolicy(pin_memory=True)
+            fsdp2_load_full_state_dict(self.module, full_state, self.device_mesh, offload_policy)
+        else:
+            # FSDP1 (and DDP / single-process). The DCP API reshards the replicated
+            # full state into the wrapped module; works for FSDP1 and FSDP2 alike.
+            # Mirror fsdp2_load_full_state_dict's version guard: the official torch
+            # 2.6.0 set_model_state_dict OOMs, so use the vendored 2.7.0 copy there.
+            from packaging import version
+
+            if version.parse(torch.__version__) >= version.parse("2.7.0"):
+                from torch.distributed.checkpoint.state_dict import StateDictOptions, set_model_state_dict
+            else:
+                from verl.third_party.torch.distributed.checkpoint.state_dict import (
+                    StateDictOptions,
+                    set_model_state_dict,
+                )
+
+            options = StateDictOptions(full_state_dict=True, broadcast_from_rank0=False, strict=strict)
+            set_model_state_dict(self.module, full_state, options=options)
+
+        if self._is_offload_param:
+            offload_fsdp_model_to_cpu(self.module)
+
     def disable_adapter(self) -> ContextManager:
         return self.module.disable_adapter()
 

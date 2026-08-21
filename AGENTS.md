@@ -82,6 +82,14 @@ change and explain why**.
   [`docs/contributing/editing-agent-instructions.md`](docs/contributing/editing-agent-instructions.md)
   — Rules for modifying AGENTS.md or any domain-specific guide it references.
 
+## Project Pipelines
+
+Experiment pipelines live under `examples/`. **Compositional generalization** —
+atomic→compositional skill learning (two-stage), a questioner/solver self-play
+curriculum, `paper`/`lenpres` operator pools, GRPO + ReVal — is summarized in
+[`compositional.md`](compositional.md); usage in
+`examples/compositional_trainer/README.md`.
+
 ## Acknowledgements
 
 Adapted from the [vLLM project](https://github.com/vllm-project/vllm)'s [`AGENTS.md`](https://github.com/vllm-project/vllm/blob/main/AGENTS.md).

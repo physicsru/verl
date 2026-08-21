@@ -95,5 +95,6 @@ launch_training() {
         -x TOTAL_TRAINING_STEPS -x TOTAL_EPOCHS \
         -x TEST_FREQ -x SAVE_FREQ \
         -x LENGTHGEN_NUM_EXAMINE \
+        -x LOG_VAL_GENERATIONS -x ROLLOUT_DATA_DIR -x VAL_BATCH_SIZE \
         bash "${PBS_O_WORKDIR}/examples/lengthgen_trainer/train_per_node.sh"
 }

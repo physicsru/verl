@@ -32,6 +32,9 @@ SAVE_FREQ=${SAVE_FREQ:-100}
 MODEL_PATH=${MODEL_PATH:-Qwen/Qwen3-4B}
 LENGTHGEN_NUM_EXAMINE=${LENGTHGEN_NUM_EXAMINE:-3}
 export LENGTHGEN_NUM_EXAMINE
+LOG_VAL_GENERATIONS=${LOG_VAL_GENERATIONS:-0}
+ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-}
+VAL_BATCH_SIZE=${VAL_BATCH_SIZE:-500}
 
 if [[ "${OMPI_COMM_WORLD_RANK}" == "$(( NUM_NODES - 1 ))" ]]; then
     echo "[${HOSTNAME}] starting Ray head on ${SERVER_NODE}:6379"
@@ -55,13 +58,14 @@ if [[ "${OMPI_COMM_WORLD_RANK}" == "$(( NUM_NODES - 1 ))" ]]; then
         data.filter_overlong_prompts=True \
         data.truncation=error \
         data.val_max_samples=-1 \
+        data.val_batch_size=${VAL_BATCH_SIZE} \
         actor_rollout_ref.model.path=${MODEL_PATH} \
         actor_rollout_ref.model.use_remove_padding=True \
         actor_rollout_ref.model.enable_gradient_checkpointing=True \
         'actor_rollout_ref.model.custom_chat_template=${oc.env:CUSTOM_CHAT_TEMPLATE}' \
         actor_rollout_ref.actor.optim.lr=1e-6 \
         actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
-        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
+        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=16 \
         actor_rollout_ref.actor.ppo_epochs=1 \
         actor_rollout_ref.actor.use_kl_loss=True \
         actor_rollout_ref.actor.kl_loss_coef=0.001 \
@@ -71,17 +75,17 @@ if [[ "${OMPI_COMM_WORLD_RANK}" == "$(( NUM_NODES - 1 ))" ]]; then
         actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
         actor_rollout_ref.actor.use_dynamic_bsz=True \
         actor_rollout_ref.actor.ppo_max_token_len_per_gpu=16384 \
-        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
+        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=16 \
         actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
         actor_rollout_ref.rollout.name=vllm \
-        actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+        actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
         actor_rollout_ref.rollout.temperature=1.0 \
         actor_rollout_ref.rollout.n=${ROLLOUT_N} \
         actor_rollout_ref.rollout.enable_chunked_prefill=False \
         actor_rollout_ref.rollout.free_cache_engine=True \
         actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True \
         actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=8192 \
-        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=2 \
+        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=16 \
         actor_rollout_ref.ref.fsdp_config.param_offload=True \
         actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
         actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=8192 \
@@ -96,7 +100,9 @@ if [[ "${OMPI_COMM_WORLD_RANK}" == "$(( NUM_NODES - 1 ))" ]]; then
         trainer.save_freq=${SAVE_FREQ} \
         trainer.test_freq=${TEST_FREQ} \
         trainer.total_epochs=${TOTAL_EPOCHS} \
-        trainer.total_training_steps=${TOTAL_TRAINING_STEPS}
+        trainer.total_training_steps=${TOTAL_TRAINING_STEPS} \
+        trainer.log_val_generations=${LOG_VAL_GENERATIONS} \
+        ${ROLLOUT_DATA_DIR:+trainer.rollout_data_dir=${ROLLOUT_DATA_DIR}}
     HEAD_EXIT=$?
     echo "[${HOSTNAME}] trainer exited with ${HEAD_EXIT}"
     exit ${HEAD_EXIT}

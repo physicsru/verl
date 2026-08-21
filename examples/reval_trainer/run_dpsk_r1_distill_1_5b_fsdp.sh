@@ -7,10 +7,13 @@
 # Paper hyperparameters reproduced here:
 #   - M_prompts = 128, N_rollouts = 8 (effective trajectory batch = 1024)
 #   - β = 0.002
-#   - K = 2 updates per fresh batch (paper averages ~2 updates/trajectory via the
-#     FIFO buffer M=5120 sampled K=2 times; this prototype expresses K via ppo_epochs)
-#   - Periodic π_ref ← π_θ reset every 200 steps (DISABLED here; see README — the
-#     in-place ref-weight sync is left as an extension point)
+#   - K = 2 updates per fresh batch, realised structurally by the fit loop: 1
+#     on-policy update + 1 off-policy update sampled from the FIFO buffer (M=5120).
+#     actor.ppo_epochs is forced to 1; K does NOT come from ppo_epochs.
+#   - Periodic π_ref ← π_θ reset every 200 steps: implemented (in-memory actor→ref
+#     weight copy + buffer flush). DISABLED by default (freq=0), which is
+#     paper-faithful for the 1.5B run; set REVAL_REF_RESET_FREQ=200 for
+#     short-response models (Section 5.5.2, e.g. Qwen2.5-Math-7B).
 #   - Temperature 1.0
 #   - 650 iterations on DeepScaleR
 #   - Group-mean-normalized reward (paper's best variant, Section 5.5.4)
@@ -44,8 +47,8 @@ MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-7168}
 
 # Core ReVal knobs.
 REVAL_BETA=${REVAL_BETA:-0.002}
-REVAL_K=${REVAL_K:-2}
-REVAL_REF_RESET_FREQ=${REVAL_REF_RESET_FREQ:-0}     # set 200 once you wire reset
+# K=2 is structural (1 on-policy + 1 off-policy update per step), not a knob.
+REVAL_REF_RESET_FREQ=${REVAL_REF_RESET_FREQ:-0}     # 0=off (paper 1.5B); 200 for short-response models
 REVAL_NORMALIZE_REWARD=${REVAL_NORMALIZE_REWARD:-True}
 # Paper: FIFO buffer of 5120 trajectories (~5 fresh batches at M=128, N=8).
 REVAL_BUFFER_SIZE=${REVAL_BUFFER_SIZE:-5120}
@@ -66,7 +69,6 @@ TOTAL_EPOCHS=${TOTAL_EPOCHS:-30}
 DATA=(
     algorithm.adv_estimator=reval
     algorithm.reval_beta=${REVAL_BETA}
-    algorithm.reval_updates_per_iter=${REVAL_K}
     algorithm.reval_ref_reset_freq=${REVAL_REF_RESET_FREQ}
     algorithm.reval_normalize_reward=${REVAL_NORMALIZE_REWARD}
     algorithm.reval_buffer_size=${REVAL_BUFFER_SIZE}
@@ -95,7 +97,8 @@ ACTOR=(
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR}
     actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE}
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${PPO_MICRO_BATCH_SIZE_PER_GPU}
-    actor_rollout_ref.actor.ppo_epochs=${REVAL_K}
+    # ppo_epochs is forced to 1 by _force_reval_config (K=2 lives in the fit loop).
+    actor_rollout_ref.actor.ppo_epochs=1
     actor_rollout_ref.actor.policy_loss.loss_mode=reval
     actor_rollout_ref.actor.policy_loss.reval_beta=${REVAL_BETA}
     # Paper: asymmetric GRPO IS clipping 0.28 (upper) / 0.2 (lower).

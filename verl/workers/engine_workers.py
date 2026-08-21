@@ -667,6 +667,38 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         assert "actor" in self.role, "save_checkpoint only support actor role"
         self.actor.save_checkpoint(local_path, hdfs_path, global_step, max_ckpt_to_keep)
 
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def sync_ref_with_actor(self, verify: bool = False):
+        """Copy current actor weights into the reference model in place (π_ref ← π_θ).
+
+        Used by ReVal's periodic reference reset (arXiv:2603.23355 §5.5.2). Both
+        engines live in this same worker process, so the export/import is local to
+        each rank (no cross-group dispatch). No-op when there is no separate
+        reference engine (e.g. ref_in_actor / LoRA, where ref = actor-with-adapter-off).
+
+        When ``verify`` is set, re-reads both models afterwards and logs the maximum
+        absolute parameter difference — it must be ~0 if the copy took effect. This
+        is ReVal's Calibrated-Initialization oracle (Proposition 2): right after a
+        reset, π_ref ≡ π_θ. Enable only on a debug run (it materialises both models).
+        """
+        if self.ref is None or self.actor is None:
+            return
+        per_tensor_param, _ = self.actor.engine.get_per_tensor_param()
+        self.ref.engine.load_per_tensor_param(per_tensor_param)
+
+        if verify:
+            actor_params = dict(self.actor.engine.get_per_tensor_param()[0])
+            max_diff = 0.0
+            for name, ref_t in self.ref.engine.get_per_tensor_param()[0]:
+                actor_t = actor_params.get(name)
+                if actor_t is not None:
+                    max_diff = max(max_diff, (actor_t.float() - ref_t.float()).abs().max().item())
+            msg = f"[reval] ref-reset verify: max|pi_ref - pi_theta| = {max_diff:.3e}"
+            if max_diff > 1e-3:
+                logger.error(msg + "  <-- RESET DID NOT TAKE EFFECT")
+            else:
+                logger.info(msg)
+
     @register(dispatch_mode=Dispatch.ONE_TO_ALL, blocking=False)
     async def update_weights(self, global_steps: int = None, mode: str = "auto"):
         """Update weights from trainer to rollout.

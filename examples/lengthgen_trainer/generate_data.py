@@ -38,13 +38,16 @@ from tasks import TASKS, MaxSubarray, LIS, Knapsack01
 # ============================================================================
 
 CODE_INSTRUCTION = (
-    "Follow these steps:\n"
-    "1. Abstract: state the general problem for any input of this type.\n"
-    "2. Code: write a Python function that solves the general problem.\n"
-    "3. Apply: substitute the given input, trace through the code, and give the answer in \\boxed{}."
+    "Let's think step by step. First, understand the problem and restate it in the "
+    "abstract, as a general problem for an input of arbitrary length. Then write a "
+    "Python function that solves the general case. Finally, apply your function to the "
+    "given input and put the final answer in \\boxed{}."
 )
 
-COT_INSTRUCTION = "Show your work step by step, then put the final answer in \\boxed{}."
+COT_INSTRUCTION = (
+    "Let's think step by step. Reason through the problem carefully, then put the "
+    "final answer in \\boxed{}."
+)
 
 
 def render_problem_max_subarray(inst, condition="cot"):
@@ -52,7 +55,6 @@ def render_problem_max_subarray(inst, condition="cot"):
     return (
         f"Given the array {inst.arr}, find the maximum contiguous subarray sum "
         f"using dynamic programming.\n"
-        f"Recurrence: dp[i] = max(arr[i], dp[i-1] + arr[i]).\n"
         f"{instruction}"
     )
 
@@ -61,7 +63,6 @@ def render_problem_lis(inst, condition="cot"):
     return (
         f"Given the sequence {inst.arr}, find the length of the longest strictly "
         f"increasing subsequence using dynamic programming.\n"
-        f"Recurrence: dp[i] = 1 + max({{dp[j] : j < i, arr[j] < arr[i]}} ∪ {{0}}).\n"
         f"{instruction}"
     )
 
@@ -71,7 +72,6 @@ def render_problem_knapsack(inst, condition="cot"):
     return (
         f"0/1 Knapsack with capacity W = {inst.W}.\n"
         f"Items (weight, value): [{items_str}]\n"
-        f"Recurrence: dp[i][w] = max(dp[i-1][w], dp[i-1][w - w_i] + v_i if w_i <= w else 0).\n"
         f"{instruction}"
     )
 
