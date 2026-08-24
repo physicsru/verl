@@ -538,6 +538,66 @@ mechanisms, split by variant —
   duplication, halves length; or an explicit episode-count cue in the plan
   line ("k helpers to recall").
 
+**Omission structure** (non-truncated failures, d≥4, both d12 and d13b):
+
+1. **Soft count ceiling, tail-biased** — the episode loop under-emits by a
+   k-dependent shortfall, not a hard stop at the trained k: d12 (trained
+   k≈2) emits mode 6-7 episodes at k=8 and 7-8 at k=10 (shortfall grows
+   ~1-3 with k); d13b (trained k≈2-3) is tighter (mode 7-8 at k=8). Deeper
+   comp training ⇒ better count extrapolation. Omitted ops are strongly
+   LATE-position (60%+ in the last quartile of appearance order; d13b almost
+   exclusively ≥0.5): episodes are emitted in order and the loop stops early.
+2. **Omitted ops vanish entirely** — 751/910 (d12) and 393/394 (d13b) of
+   missing ops are absent from the Assemble block too, while the copied
+   skeleton still calls them → NameError. The tail ops drop out of the whole
+   working plan, not just the episode list.
+3. **Third mechanism: skeleton paren-copy failure.** d13b's top_level_error
+   is almost entirely `SyntaxError: '(' was never closed` (221/229; d12: 25)
+   — copying the deeply-nested skeleton into Assemble loses closing parens.
+   Pure copy-fidelity, unrelated to recall; grows with nesting depth.
+
+So the "trained+3 rapid decay" = truncation (budget) + episode-count
+leakage (tail omission) + paren-copy errors, in variant-dependent mixture.
+Convergent fix = **RA-v2**: enumerated plan line ("Helpers to recall:
+func_a, func_b, … (k total)" — the current stitched plan line does NOT
+enumerate), defs written once (inline episodes), and a SEQUENTIAL assemble
+(`x = func_a(x, …)` chain / loop) that never copies the nested parens.
+
+**Budget causality CONFIRMED** (job 2553182, train-op set @ 3072 tokens,
+`analysis/ci_trainops_sweep_b3072.md`): d14 recovers d6/d7/d8 =
+0.953→0.996 / 0.867→0.930 / 0.695→**0.852** (per-op p 0.98 at d8), while
+d12 and d13b are unchanged within ±0.008 at every depth — omission and
+paren errors do not heal with budget, exactly as predicted. Retraction to
+§16 pt. 3: at fair budget RA's train-op deep cost vs baseline is small
+(0.852 vs 0.969 at d8), not 0.695.
+
+**Held-out is NOT budget-bound** (job 2553298, held-out set @ 3072,
+`analysis/ci_trainops_sweep_ho_b3072.md`): d14 held-out CI unchanged within
+±0.008 at every depth (d8 0.152→0.160; d12/d13b likewise) — the published
+held-out headline numbers stand. Failure classification of d14 held-out
+@3072 (zero truncations) shows WHY budget never mattered there — failures
+are CONTENT errors, not mechanics:
+
+| held-out d8 (n=256) | count | share |
+|---|---|---|
+| ok | 41 | 16% |
+| **TypeError** — def written with the wrong arity/signature | **119** | **46%** |
+| ran, wrong answer — body misrecalled | 54 | 21% |
+| top_level_error (paren copy) | 24 | 9% |
+| NameError (omission, with/without missing episode) | 16 | 6% |
+
+The same ops are x_i = 1.000 atomically, so under multi-def load the
+held-out op's episode gets contaminated by more-familiar train-op patterns —
+**predominantly at the SIGNATURE level** (e.g. `def func_8(s)` for rotate_str
+(s, n)), secondarily at body level. Omission/parens/budget — the mechanisms
+that bound TRAIN-op depth — are minor on held-out. This is the op-familiarity
+gap of §16 pt. 2, now localized: per-op p≈0.79 is mostly arity confusion.
+
+Note the arity is VISIBLE in the prompt (every call site is in the skeleton):
+a cheap RA-v2 lever is an episode header that restates it —
+`Recall func_8 (called as func_8(…, 2): 2 parameters): <gloss>` — derivable
+for free in stitched targets, targeting the 46% mode without new content.
+
 **Uniform theoretical reference added** (`p̄₁^k`, p̄₁ = overall depth-1
 accuracy; extra columns in `compositionality_index.py` reports): baseline
 observed 0.207 vs reference 0.989 at depth 3 (the original indictment); d14

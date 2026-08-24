@@ -28,23 +28,33 @@ export REWARD_FN="${PBS_O_WORKDIR}/${CT}/reward_fn_codeexec.py"
 
 _BASE="${PBS_O_WORKDIR}/data/compositional/paper"
 CKROOT="${PBS_O_WORKDIR}/checkpoints/compositional"
-export STAGE1_FILE="${_BASE}/stage2_level1to8_trainops_codeexec/test.parquet"
+# default = train-op set; override for held-out re-sweeps via TOPS_TEST_FILE
+export STAGE1_FILE="${TOPS_TEST_FILE:-${_BASE}/stage2_level1to8_trainops_codeexec/test.parquet}"
 export N_SAMPLES=1
 export ROLLOUT_TEMP=0.0
 export ROLLOUT_TOP_P=1.0
-export ROLLOUT_MAX_TOKENS=1536
-export ROLLOUT_MAX_MODEL_LEN=4096
+# Budget matters: at 1536, depth-8 RA answers truncate ~20% (§16). Override
+# for the budget-causality re-sweep: -v ROLLOUT_MAX_TOKENS=3072,TOPS_TAG=b3072
+export ROLLOUT_MAX_TOKENS=${ROLLOUT_MAX_TOKENS:-1536}
+export ROLLOUT_MAX_MODEL_LEN=${ROLLOUT_MAX_MODEL_LEN:-4096}
 export MAX_PROBLEMS=-1
+TOPS_TAG=${TOPS_TAG:-}
 
 resolve_hf_ckpt() { find "$1" -type d -name huggingface 2>/dev/null | sort | tail -1; }
 
-SWEEPS=(
+ALL_SWEEPS=(
   "baseline=${CKROOT}/stage15b_paper_closedbook_cx_qwen3_4b/global_step_500/huggingface"
   "d1=$(resolve_hf_ckpt ${CKROOT}/ra_sft_bootstrap_paper_d1_qwen3_4b)"
   "d12=$(resolve_hf_ckpt ${CKROOT}/ra_sft_bootstrap_paper_d12_qwen3_4b)"
   "d13b=$(resolve_hf_ckpt ${CKROOT}/ra_sft_bootstrap_paper_d13b_qwen3_4b)"
   "d14=$(resolve_hf_ckpt ${CKROOT}/ra_sft_bootstrap_paper_qwen3_4b)"
 )
+# '+'-separated subset via TOPS_VARIANTS (PBS -v comma caveat), default all.
+WANT=" $(echo "${TOPS_VARIANTS:-baseline+d1+d12+d13b+d14}" | tr '+' ' ') "
+SWEEPS=()
+for SPEC in "${ALL_SWEEPS[@]}"; do
+    case "${WANT}" in *" ${SPEC%%=*} "*) SWEEPS+=("${SPEC}");; esac
+done
 
 CI_ARGS=()
 SEED=91
@@ -56,14 +66,14 @@ for SPEC in "${SWEEPS[@]}"; do
     echo "==================== train-op sweep ${LABEL} (${CKPT}) ===================="
     export CUR_MODEL="${CKPT}"
     export RFT_ITER=${SEED}; SEED=$((SEED+1))
-    export ROLLOUT_DIR="${_BASE}/ra_rft/trainops_sweep_${LABEL}"
+    export ROLLOUT_DIR="${_BASE}/ra_rft/trainops_sweep_${LABEL}${TOPS_TAG:+_${TOPS_TAG}}"
     launch_mpi ${CT}/_rollout_launch.sh
     CI_ARGS+=("${LABEL}=${ROLLOUT_DIR}")
 done
 
 python3 ${CT}/compositionality_index.py \
     --sweep "${CI_ARGS[@]}" \
-    --out "${PBS_O_WORKDIR}/analysis/ci_trainops_sweep.md"
+    --out "${PBS_O_WORKDIR}/analysis/ci_trainops_sweep${TOPS_TAG:+_${TOPS_TAG}}.md"
 
 echo "==================== train-op sweep finished ===================="
 echo "CI report: analysis/ci_trainops_sweep.md"
