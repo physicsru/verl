@@ -42,6 +42,8 @@ export COMPOSITIONAL_NUM_EXAMINE
 # SAVE_HF_MODEL=1 -> also write full HF weights under <ckpt>/actor/huggingface so
 # the next stage can load it directly as model.path (used for stage1->stage2 chaining).
 SAVE_HF_MODEL=${SAVE_HF_MODEL:-0}
+# GRPO KL-to-reference coefficient (use_kl_loss); RA-RL uses 0.01 (run_rl_ra.sh).
+KL_COEF=${KL_COEF:-0.001}
 
 # ReVal knobs (only used when RL_METHOD=reval).
 REVAL_BETA=${REVAL_BETA:-0.002}
@@ -149,7 +151,7 @@ else
         algorithm.use_kl_in_reward=False
         actor_rollout_ref.actor.ppo_epochs=1
         actor_rollout_ref.actor.use_kl_loss=True
-        actor_rollout_ref.actor.kl_loss_coef=0.001
+        actor_rollout_ref.actor.kl_loss_coef=${KL_COEF:-0.001}
         actor_rollout_ref.actor.kl_loss_type=low_var_kl
     )
 fi

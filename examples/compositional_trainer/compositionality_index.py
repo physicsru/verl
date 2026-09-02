@@ -51,7 +51,8 @@ import pandas as pd
 os.environ.setdefault("COMPOSITIONAL_NUM_EXAMINE", "0")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_FUNC_RE = re.compile(r"func_\d+")
+import operators as _ops_mod
+_FUNC_RE = re.compile(_ops_mod.FUNC_RE_STR)
 
 
 def _ops_of(ref_code):
@@ -133,11 +134,16 @@ def ci_from_sweep(rows):
 # ---------------------------------------------------------------------------
 
 _LOG_METRIC_RE = re.compile(
-    r"val-aux/compositional-codeexec-[\w-]*depth(\d)/(score|exec_ok)/mean@1:([\d.eE+-]+)")
+    r"val-aux/compositional-codeexec-([\w-]*?)-?depth(\d+)/(score|exec_ok)/mean@1:([\d.eE+-]+)")
 
 
-def parse_log(path):
-    """[(step, {depth: {'score':v,'exec_ok':v}}), ...] sorted by step."""
+def parse_log(path, source=None):
+    """[(step, {depth: {'score':v,'exec_ok':v}}), ...] sorted by step.
+
+    source: data_source family filter (e.g. 'heldout', 'rlops', 'probe' — the
+    tags written by build_rl_ra_data.py tag-val). Required when a run
+    validates on several families, which would otherwise overwrite each other.
+    """
     out = []
     for ln in open(path, errors="ignore"):
         if "val-aux/compositional" not in ln:
@@ -146,7 +152,9 @@ def parse_log(path):
         if not m:
             continue
         d = defaultdict(dict)
-        for depth, key, val in _LOG_METRIC_RE.findall(ln):
+        for fam, depth, key, val in _LOG_METRIC_RE.findall(ln):
+            if source is not None and fam != source:
+                continue
             d[int(depth)][key] = float(val)
         if d:
             out.append((int(m.group(1)), dict(d)))
@@ -198,7 +206,7 @@ def fmt_table(table, label, p_bar=None):
 
 def fmt_ops(x):
     lines = ["### Per-op depth-1 recall x_i", "", "| op | x_i |", "|---|---|"]
-    for op in sorted(x, key=lambda o: int(o.split("_")[1])):
+    for op in sorted(x, key=lambda o: _ops_mod.FUNC_ORDER.get(o, 999)):
         lines.append(f"| {op} | {x[op]:.3f} |")
     return "\n".join(lines)
 
@@ -212,6 +220,9 @@ def main():
                     help="test set for k(n); required with --log")
     ap.add_argument("--all-steps", action="store_true",
                     help="log mode: every validation step, not just first/last")
+    ap.add_argument("--source", default=None,
+                    help="log mode: data_source family (heldout|rlops|probe|paper) when a run "
+                         "validates on several val files")
     ap.add_argument("--out", default=None, help="also write markdown here")
     args = ap.parse_args()
 
@@ -224,7 +235,7 @@ def main():
     if args.log:
         assert args.test_parquet, "--log requires --test-parquet for k(n)"
         kmap = k_per_depth(args.test_parquet)
-        traj = parse_log(args.log)
+        traj = parse_log(args.log, source=args.source)
         assert traj, f"no validation metrics found in {args.log}"
         picks = traj if args.all_steps else [traj[0], traj[-1]]
         for step, metrics in picks:

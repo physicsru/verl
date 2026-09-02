@@ -100,7 +100,7 @@ def _rename(code):
 
 def _helpers_source(func_ids):
     parts = []
-    for fid in sorted(func_ids, key=lambda f: int(f.split("_")[1])):
+    for fid in sorted(func_ids, key=ops_mod.FUNC_ORDER.__getitem__):
         _, fn = FUNC_BY_ID[fid]
         parts.append(inspect.getsource(fn).rstrip())
     return _rename("\n\n\n".join(parts))
@@ -108,7 +108,7 @@ def _helpers_source(func_ids):
 
 def build_target(func_ids, ref_code, rng):
     """Plan (recall each hidden op) + one code block (reference bodies + main_solution)."""
-    ordered = sorted(func_ids, key=lambda f: int(f.split("_")[1]))
+    ordered = sorted(func_ids, key=ops_mod.FUNC_ORDER.__getitem__)
     sentences = []
     for fid in ordered:
         sig, desc = _op_meta(fid)
@@ -117,7 +117,7 @@ def build_target(func_ids, ref_code, rng):
     plan = " ".join(sentences) + " " + rng.choice(_CLOSERS).format(it=it, that=that)
 
     code = _helpers_source(func_ids) + "\n\n\n" + ref_code.strip()
-    if "func_0" in func_ids:  # deterministic_shuffle needs gcd
+    if ops_mod.GCD_FUNC in func_ids:  # deterministic_shuffle needs gcd
         code = "from math import gcd\n\n" + code
     return f"Step 1 - Plan: {plan}\n\nStep 2 - Program:\n```python\n{code}\n```"
 
@@ -152,12 +152,12 @@ def main():
         for _, row in df.iterrows():
             n_src += 1
             gt = json.loads(row["reward_model"]["ground_truth"])
-            ids = frozenset(re.findall(r"func_\d+", gt["ref_code"]))
+            ids = frozenset(re.findall(ops_mod.FUNC_RE_STR, gt["ref_code"]))
             if not ids:  # primitive-only program: nothing to recall
                 n_primitive += 1
                 continue
             ei = dict(row["extra_info"]) if row["extra_info"] is not None else {}
-            key = min(ids, key=lambda f: int(f.split("_")[1]))
+            key = min(ids, key=ops_mod.FUNC_ORDER.__getitem__)
             by_op[key].append((ids, gt, str(ei.get("split", ""))))
     print(f"[closedbook-cx] {n_src} source rows -> {sum(map(len, by_op.values()))} "
           f"with >=1 hidden op ({n_primitive} primitive-only skipped), {len(by_op)} ops")
@@ -168,7 +168,7 @@ def main():
     rng = random.Random(args.seed)
     need = args.per_op + args.val_per_op
     train_rows, val_rows = [], []
-    for fid in sorted(by_op, key=lambda f: int(f.split("_")[1])):
+    for fid in sorted(by_op, key=ops_mod.FUNC_ORDER.__getitem__):
         cand = by_op[fid]
         assert len(cand) >= need, (
             f"{fid}: only {len(cand)} candidates < per_op+val_per_op={need} — "
@@ -201,7 +201,7 @@ def main():
             df = pd.read_parquet(src)
             for _, row in df.iterrows():
                 gt = json.loads(row["reward_model"]["ground_truth"])
-                ids = frozenset(re.findall(r"func_\d+", gt["ref_code"]))
+                ids = frozenset(re.findall(ops_mod.FUNC_RE_STR, gt["ref_code"]))
                 if not ids:
                     continue
                 bad = ids - TRAIN_FUNC_IDS
@@ -231,7 +231,7 @@ def main():
                     ],
                     "extra_info": {
                         "pool": "paper", "stage": 1, "depth": depth,
-                        "op": "+".join(sorted(ids, key=lambda f: int(f.split("_")[1]))),
+                        "op": "+".join(sorted(ids, key=ops_mod.FUNC_ORDER.__getitem__)),
                         "op_split": "train", "condition": "code_exec_closedbook",
                     },
                 }
@@ -240,7 +240,7 @@ def main():
                     mention_counts[fid] += 1
         print(f"[closedbook-cx] comp rows: {args.comp_per_depth}+{args.comp_val_per_depth} per depth; "
               f"helper coverage: " + ", ".join(f"{f}:{mention_counts[f]}" for f in
-                                               sorted(mention_counts, key=lambda f: int(f.split("_")[1]))))
+                                               sorted(mention_counts, key=ops_mod.FUNC_ORDER.__getitem__)))
 
     # End-to-end spot check: the synthesized response must score 1.0 under the
     # actual reward function (extraction + sandbox exec + grading).

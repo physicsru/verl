@@ -206,6 +206,12 @@ def main():
                         "have few unique programs at shallow depth). Default: paper->program, lenpres->program_input.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save_path", required=True)
+    p.add_argument("--ops", default=None,
+                   help="comma-separated operator NAMES (operators.py) overriding the pool/split op set, "
+                        "e.g. the 10 RL ops of the probe split (run_rl_ra.sh)")
+    p.add_argument("--source_tag", default=None,
+                   help="data_source = compositional-forward-<tag>-depthN (default: pool). Distinct tags "
+                        "keep verl's per-data_source val metrics separate across val files.")
     args = p.parse_args()
 
     # Pool-aware default output cap. Paper baseline is faithful (no real sample
@@ -223,6 +229,13 @@ def main():
     # train ops for --split train and the disjoint held-out ops for --split test.
     op_split = "all" if args.stage == 1 else ("train" if args.split == "train" else "eval")
     custom_functions = ops_mod.get_ops(args.pool, op_split)
+    if args.ops:
+        names = [n.strip() for n in args.ops.split(",") if n.strip()]
+        unknown = [n for n in names if n not in ops_mod.PAPER_ALL_SET]
+        assert not unknown, f"unknown ops {unknown}"
+        custom_functions = {n: ops_mod.PAPER_ALL_SET[n] for n in names}
+        print(f"[config] --ops override: {len(names)} ops {names}")
+    source_tag = args.source_tag or args.pool
 
     depths = list(range(args.min_level, args.max_level + 1))
     assert args.data_num % len(depths) == 0, \
@@ -263,7 +276,7 @@ def main():
             generated.add(key)
             full_code = generate_full_code(expr, custom_functions, args.stage)
             rows.append({
-                "data_source": f"compositional-forward-{args.pool}-depth{depth}",
+                "data_source": f"compositional-forward-{source_tag}-depth{depth}",
                 "prompt": [{"role": "user", "content": FORWARD_PROMPT.format(code=full_code, input=x)}],
                 "ability": "reasoning",
                 "reward_model": {

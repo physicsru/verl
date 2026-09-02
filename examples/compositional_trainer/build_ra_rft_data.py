@@ -43,9 +43,9 @@ os.environ.setdefault("COMPOSITIONAL_NUM_EXAMINE", "0")
 import operators as ops_mod  # noqa: E402
 from reward_fn_codeexec import compute_score  # noqa: E402
 
-_FUNC_RE = re.compile(r"func_\d+")
+_FUNC_RE = re.compile(ops_mod.FUNC_RE_STR)
 _RECALL_RE = re.compile(
-    r"Recall (func_\d+):[^\n]*\n+```(?:python|py)?[ \t]*\r?\n(.*?)```",
+    r"Recall (" + ops_mod.FUNC_RE_STR + r"):[^\n]*\n+```(?:python|py)?[ \t]*\r?\n(.*?)```",
     re.DOTALL | re.IGNORECASE)
 _N_TO_NAME = {v: k for k, v in ops_mod.func_name_mapping.items()}
 

@@ -10,6 +10,7 @@
 #   MODEL_PATH TRAIN_FILE SAVE_DIR EXPERIMENT_NAME CUSTOM_CHAT_TEMPLATE
 #   MASTER_ADDR  (+ NUM_NODES from the header)
 # Optional: VAL_FILES TORCH_MASTER_PORT SFT_EPOCHS SFT_LR SFT_MAX_LENGTH SFT_BATCH SFT_MICRO_BSZ
+#           SFT_SEED (trainer.seed, default 1 = every pre-2026-08-25 run)
 #
 # The chat template is read from $CUSTOM_CHAT_TEMPLATE via OmegaConf's oc.env
 # resolver (Jinja braces never hit the shell/hydra parser). It MUST match what
@@ -53,6 +54,7 @@ torchrun \
     model.path="${MODEL_PATH}" \
     optim.lr="${SFT_LR:-2e-5}" \
     trainer.total_epochs="${SFT_EPOCHS:-2}" \
+    trainer.seed="${SFT_SEED:-1}" \
     trainer.nnodes="${WSIZE}" \
     trainer.n_gpus_per_node=1 \
     trainer.project_name="${WANDB_PROJECT:-verl_compositional}" \

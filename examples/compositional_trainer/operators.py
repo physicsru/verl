@@ -24,6 +24,7 @@ Pure stdlib only — safe to import inside data generation, the reward function,
 and offline checks.
 """
 
+import os
 from itertools import chain
 from math import gcd
 
@@ -265,6 +266,21 @@ func_name_mapping = {
     "backchain_add_digit": 'func_23',
     "backchain_palindrome": 'func_24',
 }
+
+# Alternative OPAQUE, NON-NUMERIC names (name-collision ablation, HISTORY §17):
+# same `func_` prefix, letter tokens instead of digits — isolates "digit-token
+# neighbour confusion" (func_10→func_11 etc.). Select with
+# COMPOSITIONAL_NAME_SCHEME=alt (read once at import). FUNC_RE_STR / FUNC_ORDER
+# are the scheme-aware regex + canonical sort order every consumer must use.
+_ALT_TOKENS = ["qzk", "wrm", "vex", "hjd", "tolf", "brug", "lsiw", "kacy", "dmov", "nupx",
+               "gethy", "rybon", "sfin", "cowl", "xque", "mafo", "ubjet", "ykher", "pidz",
+               "enrov", "javt", "owgis", "aqes", "ilcum", "umket"]
+NAME_SCHEME = os.environ.get("COMPOSITIONAL_NAME_SCHEME", "num")
+if NAME_SCHEME == "alt":
+    func_name_mapping = {op: f"func_{tok}" for op, tok in zip(list(func_name_mapping), _ALT_TOKENS)}
+FUNC_RE_STR = r"func_\d+" if NAME_SCHEME == "num" else r"func_[a-z]+"
+FUNC_ORDER = {fn: i for i, fn in enumerate(func_name_mapping.values())}
+GCD_FUNC = func_name_mapping["deterministic_shuffle"]   # the one op whose body needs `from math import gcd`
 
 # ---------------------------------------------------------------------------
 # Paper pool (baseline) — verbatim split from string_data.py

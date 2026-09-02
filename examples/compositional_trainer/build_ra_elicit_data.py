@@ -130,7 +130,7 @@ def main():
             continue
         head = orig.split(_MARKER)[0]
         gt = json.loads(r["reward_model"]["ground_truth"])
-        funcs = sorted(set(re.findall(r"func_\d+", gt["ref_code"])),
+        funcs = sorted(set(re.findall(ops_mod.FUNC_RE_STR, gt["ref_code"])),
                        key=lambda f: gt["ref_code"].index(f))
         if not funcs:   # rare literal/.upper()-only skeletons — nothing to recall
             skipped += 1

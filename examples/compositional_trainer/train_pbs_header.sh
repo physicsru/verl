@@ -112,6 +112,7 @@ launch_training() {
         -x LOG_VAL_GENERATIONS -x ROLLOUT_DATA_DIR \
         -x REVAL_BETA -x REVAL_K -x REVAL_REF_RESET_FREQ \
         -x REVAL_NORMALIZE_REWARD -x REVAL_BUFFER_SIZE \
+        -x KL_COEF -x CKPT_KEEP -x RA_EPISODE_BONUS \
         bash "${PBS_O_WORKDIR}/examples/compositional_trainer/train_per_node.sh"
 }
 
@@ -133,7 +134,7 @@ launch_mpi() {
         -x CUSTOM_CHAT_TEMPLATE -x REWARD_FN -x MODEL_PATH \
         -x EXPERIMENT_NAME -x SAVE_DIR -x TRAIN_FILE -x VAL_FILES \
         -x TORCH_MASTER_PORT \
-        -x SFT_EPOCHS -x SFT_LR -x SFT_MAX_LENGTH -x SFT_BATCH -x SFT_MICRO_BSZ \
+        -x SFT_EPOCHS -x SFT_LR -x SFT_MAX_LENGTH -x SFT_BATCH -x SFT_MICRO_BSZ -x SFT_SEED \
         -x CUR_MODEL -x STAGE1_FILE -x ROLLOUT_DIR -x N_SAMPLES \
         -x ROLLOUT_TEMP -x ROLLOUT_TOP_P -x ROLLOUT_MAX_TOKENS \
         -x ROLLOUT_MAX_MODEL_LEN -x MAX_PROBLEMS -x RFT_ITER \
