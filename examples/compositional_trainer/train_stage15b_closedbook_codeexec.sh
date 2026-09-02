@@ -32,6 +32,13 @@ export MODEL_PATH=${MODEL_PATH:-${PBS_O_WORKDIR}/checkpoints/compositional/stage
 source "${PBS_O_WORKDIR}/examples/compositional_trainer/train_pbs_header.sh"
 
 POOL=${POOL:-paper}
+# The op-name scheme follows the pool (paper_alt -> alt, paper_alt2 -> alt2): every FUNC_RE
+# consumer inside the job (CI tool, classifier, stitcher) must see it (RESULTS_PROVENANCE §①).
+case "${POOL}" in
+    paper_alt)  export COMPOSITIONAL_NAME_SCHEME=alt ;;
+    paper_alt2) export COMPOSITIONAL_NAME_SCHEME=alt2 ;;
+    *)          export COMPOSITIONAL_NAME_SCHEME=${COMPOSITIONAL_NAME_SCHEME:-num} ;;
+esac
 export EXPERIMENT_NAME=${EXPERIMENT_NAME:-stage15b_${POOL}_closedbook_cx_qwen3_4b}
 export SAVE_DIR=${SAVE_DIR:-${PBS_O_WORKDIR}/checkpoints/compositional/${EXPERIMENT_NAME}}
 

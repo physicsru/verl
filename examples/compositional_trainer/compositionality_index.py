@@ -204,6 +204,53 @@ def fmt_table(table, label, p_bar=None):
     return "\n".join(lines)
 
 
+def parse_op_groups(spec):
+    """'NAME=func_a,func_b;NAME2=...' or a treated_ops.json from build_ra_sft_data.py --cooc_heldout_k."""
+    if os.path.isfile(spec):
+        with open(spec) as f:
+            j = json.load(f)
+        return {"treated": set(j["treated"]), "untreated": set(j["untreated"])}
+    groups = {}
+    for part in spec.split(";"):
+        name, ids = part.split("=", 1)
+        groups[name.strip()] = {t.strip() for t in ids.split(",") if t.strip()}
+    return groups
+
+
+def fmt_groups(rows, groups, label):
+    """Per-depth accuracy over programs whose ops ALL lie in one group ('mixed' otherwise).
+
+    Subset-transfer test: with groups treated / untreated (held-out ops that did / did not get
+    co-occurrence practice), H1 predicts the untreated column rises with k, H0 predicts it stays
+    at the v1 level. n per cell is small at deep depth (a program must draw all its ops from one
+    group) — read it next to classify_ra_failures.py's per-op episode table.
+    """
+    stats = defaultdict(lambda: defaultdict(lambda: [0, 0.0]))   # group -> depth -> [n, acc_sum]
+    depths = sorted({d for d, _, _, _ in rows})
+    for depth, ops, acc, _ in rows:
+        g = "funcless" if not ops else "mixed"
+        for name, ids in groups.items():
+            if ops and all(o in ids for o in ops):
+                g = name
+                break
+        stats[g][depth][0] += 1
+        stats[g][depth][1] += acc
+    order = list(groups) + [g for g in ("mixed", "funcless") if g in stats]
+    lines = [f"### {label} — accuracy by op group (programs whose ops all lie in the group; cell = acc (n))", "",
+             "| group | " + " | ".join(f"d{d}" for d in depths) + " | d2+ pooled |",
+             "|---|" + "---|" * (len(depths) + 1)]
+    for g in order:
+        cells = []
+        for d in depths:
+            n, a = stats[g][d]
+            cells.append(f"{a / n:.3f} ({n})" if n else "—")
+        n2 = sum(stats[g][d][0] for d in depths if d >= 2)
+        a2 = sum(stats[g][d][1] for d in depths if d >= 2)
+        cells.append(f"{a2 / n2:.3f} ({n2})" if n2 else "—")
+        lines.append(f"| {g} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
 def fmt_ops(x):
     lines = ["### Per-op depth-1 recall x_i", "", "| op | x_i |", "|---|---|"]
     for op in sorted(x, key=lambda o: _ops_mod.FUNC_ORDER.get(o, 999)):
@@ -224,14 +271,20 @@ def main():
                     help="log mode: data_source family (heldout|rlops|probe|paper) when a run "
                          "validates on several val files")
     ap.add_argument("--out", default=None, help="also write markdown here")
+    ap.add_argument("--op-groups", default=None,
+                    help="sweep mode: 'NAME=func_a,func_b;NAME2=...' or a treated_ops.json — extra table of "
+                         "per-depth accuracy over programs whose ops all lie in one group (subset-transfer test)")
     args = ap.parse_args()
 
     blocks = []
     if args.sweep:
         for spec in args.sweep:
             label, d = spec.split("=", 1)
-            x, p_bar, table = ci_from_sweep(score_sweep(d))
+            rows = score_sweep(d)
+            x, p_bar, table = ci_from_sweep(rows)
             blocks += [fmt_table(table, f"{label} (per-op bounds)", p_bar), fmt_ops(x)]
+            if args.op_groups:
+                blocks.append(fmt_groups(rows, parse_op_groups(args.op_groups), label))
     if args.log:
         assert args.test_parquet, "--log requires --test-parquet for k(n)"
         kmap = k_per_depth(args.test_parquet)

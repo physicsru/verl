@@ -275,9 +275,17 @@ func_name_mapping = {
 _ALT_TOKENS = ["qzk", "wrm", "vex", "hjd", "tolf", "brug", "lsiw", "kacy", "dmov", "nupx",
                "gethy", "rybon", "sfin", "cowl", "xque", "mafo", "ubjet", "ykher", "pidz",
                "enrov", "javt", "owgis", "aqes", "ilcum", "umket"]
+# Second letter scheme (different random assignment) to check that an `alt` effect is not one
+# lucky name→op assignment. COMPOSITIONAL_NAME_SCHEME=alt2.
+_ALT2_TOKENS = ["ubiz", "osub", "xojum", "daj", "qotu", "emon", "hocif", "zeqi", "eqah", "zedu",
+                "hevul", "sirov", "demad", "viwus", "azes", "vux", "reben", "fapoc", "lafud", "jiva",
+                "sotox", "qos", "apeq", "imig", "uzuw"]
 NAME_SCHEME = os.environ.get("COMPOSITIONAL_NAME_SCHEME", "num")
+assert NAME_SCHEME in ("num", "alt", "alt2"), f"COMPOSITIONAL_NAME_SCHEME={NAME_SCHEME!r}"
 if NAME_SCHEME == "alt":
     func_name_mapping = {op: f"func_{tok}" for op, tok in zip(list(func_name_mapping), _ALT_TOKENS)}
+elif NAME_SCHEME == "alt2":
+    func_name_mapping = {op: f"func_{tok}" for op, tok in zip(list(func_name_mapping), _ALT2_TOKENS)}
 FUNC_RE_STR = r"func_\d+" if NAME_SCHEME == "num" else r"func_[a-z]+"
 FUNC_ORDER = {fn: i for i, fn in enumerate(func_name_mapping.values())}
 GCD_FUNC = func_name_mapping["deterministic_shuffle"]   # the one op whose body needs `from math import gcd`

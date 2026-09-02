@@ -265,14 +265,43 @@ Canonical logs: `examples/compositional_trainer/WALKTHROUGH.md` §1-21;
 
 ---
 
+## H0/H1 PLAN (pre-registered 2026-09-02; code committed, jobs NOT yet run)
+
+The research question behind the project: can LIMITED composition data (few ops, depths 2-4)
+yield composition over ARBITRARY atomic ops, or does every op need its own data? The
+evidence so far says the composition *procedure* transfers (decomposed inference 1.000, k=2
+demos extrapolate to k≈8, RL extends depth) and the bottleneck is load-robust name→def
+binding, which E-co installs with per-op atomic data in multi-task form (O(#ops), not
+O(#compositions)). Open: is that robustness a per-memory property or a transferable skill?
+
+- **H0**: load-robust binding must be installed per op (untreated ops stay at v1 level).
+- **H1**: it transfers across ops, or vanishes when names are non-confusable.
+
+| experiment | cells (× seeds 1,7,123) | readout | H1 predicts | H0 predicts |
+|---|---|---|---|---|
+| subset transfer | sub0/3/6/9 (+eco = 12): K of 12 held-out ops get co-occurrence practice, nested prefixes of one seeded permutation (`--cooc_heldout_k`) | untreated ops' per-episode ok rate (`cls_*.md` per-op table) and untreated-only program accuracy (`ci_*_groups.md`) | untreated rises with K (≥ +0.15 episode-ok from sub0 to sub9, 3 seeds same sign) | untreated flat in the v1 band (episode ok ≈ 0.77–0.85) while treated → E-co level |
+| names, matched | paper_alt + paper_alt2 pools rebuilt at 800/op (`build_pool_data.sh`), stage-1.5 from base, RA v1 and eco × 3; num side redone from `stage15b_num_frombase` (ABL_TAG=numfb) | held-out d4/d8 by scheme; eco−v1 gap under each scheme; chimera classification | letter names alone reach ≥ 0.8 at d8 for v1 (representation-level H1) | v1 stays ≤ 0.3 at d8 under every scheme; eco needed regardless |
+| operator diversity | nops4 / nops8 (+eco = 13, c1 = 0): comps from only N train ops, 16k d2-4 fixed (`generate_data.py --ops`) | held-out d4/d8 vs N | monotone rise with N (procedure generality) | flat (binding-only story) |
+| dose | dose25/50/75 (+v1 = 0, eco = 100): fraction of atomic tasks that enter grouping (`--multi_frac`) | held-out d4 vs measured under-load fraction (audit script) | — | gives the per-op practice needed; eptr's 54% → 0.53 should land on the curve |
+
+Decision rule (fixed now): a claim goes in the paper only when the 3-seed bands do not
+overlap in the predicted direction. Scripts: `build_h01_cells.sh` (CPU data),
+`build_pool_data.sh <pool> <scheme>` (matched name pools), `submit_h01_campaign.sh`
+(DRY_RUN=1 prints the 27 + 19 qsub lines); readouts are produced by
+`run_ra_depth_ablation.sh` automatically for cells that carry `treated_ops.json`.
+
+---
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
       defs under load (larger train partner pool); epho variant without the
       train-op head; 2×2 partner × position at matched load.
-- [ ] ① name ablation: rebuild paper_alt stage15b with a depth-2..4 comp
-      source (root cause in issue #7), retrain; ≥3 RA seeds per scheme; chimera
-      classification on both sweeps.
+- [ ] ① name ablation: `build_pool_data.sh paper_alt alt` / `paper_alt2 alt2`, then
+      `submit_h01_campaign.sh` PARTS=names (stage-1.5 from base → RA v1/eco × 3 seeds
+      per pool, num side re-done as numfb); chimera classification runs in-job.
+- [ ] H0/H1 cells: `build_h01_cells.sh` then `submit_h01_campaign.sh` PARTS=cells
+      (sub0/3/6/9, dose25/50/75, nops4/8 × 3 seeds = 27 jobs).
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
       held-out val + stronger KL; re-eval the last pre-collapse ckpt.
 - [ ] 8B line: fix HF export (sharded save or offline convert), then v1-8b / eco-8b.

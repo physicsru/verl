@@ -164,3 +164,28 @@ loop, saturation gate, `S`-replay, `selection.py` pruning, learned questioner.
 
 Drafted with AI assistance. Per `CLAUDE.md` §1, a human submitter must review
 every changed line and run the relevant tests before any upstream contribution.
+
+## H0/H1 campaign (2026-09-02) — does load-robust binding transfer across ops?
+
+Plan and pre-registered predictions: `analysis/RESULTS_PROVENANCE.md` "H0/H1 PLAN".
+
+```bash
+source /work/go39/b20033/code/generalization_venv/bin/activate
+CT=examples/compositional_trainer
+bash $CT/build_h01_cells.sh                      # CPU: sub0/3/6/9, dose25/50/75, nops4/8 data
+bash $CT/build_pool_data.sh paper_alt  alt       # CPU: matched letter-name pools (32k stage15b)
+bash $CT/build_pool_data.sh paper_alt2 alt2
+DRY_RUN=1 bash $CT/submit_h01_campaign.sh        # prints every qsub line; DRY_RUN=0 submits
+```
+
+Knobs behind the cells (`build_ra_sft_data.py`): `--cooc_heldout_k K [--cooc_heldout_seed]`
+(only K held-out ops get co-occurrence practice; writes `treated_ops.json`), `--multi_frac F`
+(fraction of atomic tasks grouped), `--partner_reuse` (keeps `--partner_split` cells at full
+load). Readouts: `compositionality_index.py --op-groups treated_ops.json` (accuracy on
+programs whose ops all lie in one group) and `classify_ra_failures.py` (per-op episode
+verdicts) — both run automatically at the end of `run_ra_depth_ablation.sh` when the data
+dir has `treated_ops.json` (or `ABL_CLASSIFY=1`). `audit_multi_atomic_data.py <dir>` prints
+the measured under-load / position / partner statistics of any multi-atomic data set.
+Name schemes: `COMPOSITIONAL_NAME_SCHEME=num|alt|alt2` (`operators.py`); the drivers set it
+from `POOL` (paper_alt → alt, paper_alt2 → alt2). `ABL_TAG=<tag>` keeps a re-run from
+colliding with existing ckpt / sweep / CI names; `RA_INIT` may be an experiment dir.

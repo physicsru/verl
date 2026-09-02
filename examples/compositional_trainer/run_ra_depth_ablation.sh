@@ -41,6 +41,13 @@ CT=examples/compositional_trainer
 export REWARD_FN="${PBS_O_WORKDIR}/${CT}/reward_fn_codeexec.py"
 
 POOL=${POOL:-paper}
+# The op-name scheme follows the pool (paper_alt -> alt, paper_alt2 -> alt2): every FUNC_RE
+# consumer inside the job (CI tool, classifier, stitcher) must see it (RESULTS_PROVENANCE §①).
+case "${POOL}" in
+    paper_alt)  export COMPOSITIONAL_NAME_SCHEME=alt ;;
+    paper_alt2) export COMPOSITIONAL_NAME_SCHEME=alt2 ;;
+    *)          export COMPOSITIONAL_NAME_SCHEME=${COMPOSITIONAL_NAME_SCHEME:-num} ;;
+esac
 export TORCH_MASTER_PORT=${TORCH_MASTER_PORT:-29413}
 export SFT_EPOCHS=${SFT_EPOCHS:-2}
 export SFT_LR=${SFT_LR:-2e-5}
@@ -49,6 +56,9 @@ export SFT_BATCH=${SFT_BATCH:-128}
 export SFT_MICRO_BSZ=${SFT_MICRO_BSZ:-4}
 export SFT_SEED=${SFT_SEED:-1}
 SEED_TAG=""; [ "${SFT_SEED}" != "1" ] && SEED_TAG="_s${SFT_SEED}"
+# ABL_TAG: free suffix on ckpt / sweep / CI names, e.g. ABL_TAG=numfb to replicate the v1 recipe
+# from a different stage-1.5 init without colliding with the existing ra_sft_bootstrap_<pool>_v1_s7
+ABL_TAG=${ABL_TAG:-}; TAG_SFX=""; [ -n "${ABL_TAG}" ] && TAG_SFX="_${ABL_TAG}"
 
 _BASE="${PBS_O_WORKDIR}/data/compositional/${POOL}"
 RA_ROOT="${_BASE}/ra_rft"
@@ -58,6 +68,12 @@ TRAINOPS_FILE="${_BASE}/stage2_level1to8_trainops_codeexec/test.parquet"
 INIT=${RA_INIT:-${PBS_O_WORKDIR}/checkpoints/compositional/stage15b_paper_closedbook_cx_qwen3_4b/global_step_500/huggingface}
 
 resolve_hf_ckpt() { find "$1" -type d -name huggingface 2>/dev/null | sort | tail -1; }
+# RA_INIT may name an experiment dir (checkpoints/compositional/<exp>) instead of a huggingface
+# dir — handy when the job is queued behind the stage-1.5 SFT that produces it (-W depend=afterok)
+if [ ! -f "${INIT}/config.json" ]; then
+    _R="$(resolve_hf_ckpt "${INIT}")"; [ -n "${_R}" ] && INIT="${_R}"
+fi
+echo "[ra-abl] init = ${INIT}"
 
 # rollout knobs for the greedy sweeps
 export N_SAMPLES=1
@@ -74,7 +90,7 @@ TEST_SETS=$(echo "${ABL_TEST_SETS:-heldout}" | tr '+,' '  ')
 # same ABL_VARIANTS used to overwrite each other's analysis/ci_ra_abl_<tag>.md
 # (RESULTS_PROVENANCE issue #1). Sweep dirs/ckpts were never affected (per-pool paths).
 POOL_TAG=""; [ "${POOL}" != "paper" ] && POOL_TAG="${POOL}_"
-CI_TAG="${POOL_TAG}$(echo "${VARIANTS}" | tr ' ' '_')${SEED_TAG}${BUDGET_TAG}"
+CI_TAG="${POOL_TAG}$(echo "${VARIANTS}" | tr ' ' '_')${TAG_SFX}${SEED_TAG}${BUDGET_TAG}"
 
 declare -A CI_ARGS   # test set -> "label=dir ..." list
 N_ROLLOUTS=0
@@ -84,13 +100,13 @@ for VAR in ${VARIANTS}; do
         d14|v1) DATA_DIR="${RA_ROOT}/sft_bootstrap" ;;
         *)      DATA_DIR="${RA_ROOT}/sft_bootstrap_${VAR}" ;;
     esac
-    if [ "${VAR}" = "d14" ] && [ "${SFT_SEED}" = "1" ]; then
+    if [ "${VAR}" = "d14" ] && [ "${SFT_SEED}" = "1" ] && [ -z "${ABL_TAG}" ]; then
         CKPT="$(resolve_hf_ckpt "${PBS_O_WORKDIR}/checkpoints/compositional/ra_sft_bootstrap_paper_qwen3_4b")"
     else
         if [ ! -f "${DATA_DIR}/train.parquet" ]; then
             echo "[ra-abl][ERROR] no stitched data at ${DATA_DIR} (build_ra_sft_data.py first)"; exit 1
         fi
-        export EXPERIMENT_NAME="ra_sft_bootstrap_${POOL}_${VAR}${SEED_TAG}_qwen3_4b"
+        export EXPERIMENT_NAME="ra_sft_bootstrap_${POOL}_${VAR}${TAG_SFX}${SEED_TAG}_qwen3_4b"
         export SAVE_DIR="${PBS_O_WORKDIR}/checkpoints/compositional/${EXPERIMENT_NAME}"
         export TRAIN_FILE="${DATA_DIR}/train.parquet"
         export VAL_FILES="${DATA_DIR}/test.parquet"
@@ -106,15 +122,15 @@ for VAR in ${VARIANTS}; do
     for TS in ${TEST_SETS}; do
         case "${TS}" in
             heldout)  export STAGE1_FILE="${HELDOUT_FILE}"
-                      export ROLLOUT_DIR="${RA_ROOT}/ablation_sweep_${VAR}${SEED_TAG}${BUDGET_TAG}" ;;
+                      export ROLLOUT_DIR="${RA_ROOT}/ablation_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
             trainops) export STAGE1_FILE="${TRAINOPS_FILE}"
-                      export ROLLOUT_DIR="${RA_ROOT}/trainops_sweep_${VAR}${SEED_TAG}${BUDGET_TAG}" ;;
+                      export ROLLOUT_DIR="${RA_ROOT}/trainops_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
             *) echo "[ra-abl][ERROR] unknown test set ${TS}"; exit 1 ;;
         esac
         N_ROLLOUTS=$((N_ROLLOUTS + 1))
         export RFT_ITER=9${N_ROLLOUTS}   # distinct rollout seed per sweep
         launch_mpi ${CT}/_rollout_launch.sh
-        CI_ARGS[${TS}]+="${VAR}${SEED_TAG}=${ROLLOUT_DIR} "
+        CI_ARGS[${TS}]+="${VAR}${TAG_SFX}${SEED_TAG}=${ROLLOUT_DIR} "
     done
 done
 
@@ -126,4 +142,18 @@ for TS in ${TEST_SETS}; do
         --out "${PBS_O_WORKDIR}/analysis/ci_ra_abl_${CI_TAG}${SUFFIX}.md"
     echo "CI report (${TS}): analysis/ci_ra_abl_${CI_TAG}${SUFFIX}.md"
 done
+
+# Subset-transfer readouts (H0 vs H1): per-op-group accuracy + per-op episode verdicts on the
+# held-out sweep. Automatic when the (last) data dir carries treated_ops.json; ABL_CLASSIFY=1
+# forces the classifier for any cell.
+if [ -n "${CI_ARGS[heldout]:-}" ] && { [ "${ABL_CLASSIFY:-0}" = "1" ] || [ -f "${DATA_DIR}/treated_ops.json" ]; }; then
+    GROUPS=""; [ -f "${DATA_DIR}/treated_ops.json" ] && GROUPS="--op-groups ${DATA_DIR}/treated_ops.json"
+    # shellcheck disable=SC2086
+    python3 ${CT}/compositionality_index.py --sweep ${CI_ARGS[heldout]} ${GROUPS} \
+        --out "${PBS_O_WORKDIR}/analysis/ci_ra_abl_${CI_TAG}_groups.md" || true
+    # shellcheck disable=SC2086
+    python3 ${CT}/classify_ra_failures.py --sweep ${CI_ARGS[heldout]} --min_depth 5 --workers 12 \
+        --out "${PBS_O_WORKDIR}/analysis/cls_ra_abl_${CI_TAG}.md" || true
+    echo "group / per-op reports: analysis/ci_ra_abl_${CI_TAG}_groups.md analysis/cls_ra_abl_${CI_TAG}.md"
+fi
 echo "==================== RA variants (${CI_TAG}) finished ===================="

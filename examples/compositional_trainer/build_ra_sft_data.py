@@ -371,6 +371,17 @@ def main():
                          "base atomic task gets U{0..max_extra_tasks} extra independent atomic tasks "
                          "(1-4 defs per answer), op frequencies unchanged, ops never composed")
     ap.add_argument("--max_extra_tasks", type=int, default=3)
+    ap.add_argument("--multi_frac", type=float, default=1.0,
+                    help="dose curve (H0/H1 plan, RESULTS_PROVENANCE): fraction of the atomic tasks, uniform "
+                         "over ops, that enter multi-task grouping; the rest stay single-task rows. "
+                         "1.0 = E-co (default), 0.0 = v1 atomics.")
+    ap.add_argument("--cooc_heldout_k", type=int, default=None,
+                    help="subset-transfer test (H0 vs H1): only K of the held-out ops take part in multi-task "
+                         "grouping (a seeded permutation prefix, so K=3 is a subset of K=6 ...); the other "
+                         "held-out ops' tasks stay single-task. Train ops always take part. K=0 = co-occurrence "
+                         "for train ops only. Treated/untreated ids -> <out_dir>/treated_ops.json. "
+                         "Default: every op (E-co).")
+    ap.add_argument("--cooc_heldout_seed", type=int, default=1)
     ap.add_argument("--heldout_position", choices=["any", "first", "last"], default="any",
                     help="multi-atomic grouping: place HELD-OUT ops' tasks at this position inside "
                          "each group (partners otherwise random) — disentangles position from partner "
@@ -401,6 +412,7 @@ def main():
         args.n_funcless = 1500 if args.format == "v2" else 0
 
     rng = random.Random(args.seed)
+    treated_info = None   # set by --cooc_heldout_k
     cands = []   # (user_prompt, response, gt_json, extra_info)
     tag = f"recall_assemble_sft_{args.format}{'_sc' if args.self_check else ''}"
 
@@ -445,7 +457,32 @@ def main():
         for prompt, skeleton, x, ei in atomics:
             add(prompt, skeleton, atomic_ground_truth(skeleton, x), ei, "atomic")
     else:
-        pool = list(atomics)
+        # --- eligibility for multi-task grouping (subset-transfer / dose knobs) ---
+        eligible, singles = list(atomics), []
+        if args.cooc_heldout_k is not None:
+            ho_ids = sorted({str(a[3].get("op")) for a in atomics if str(a[3].get("op_split")) == "test"},
+                            key=lambda f: ops_mod.FUNC_ORDER.get(f, 999))
+            assert 0 <= args.cooc_heldout_k <= len(ho_ids), (args.cooc_heldout_k, ho_ids)
+            perm = random.Random(args.cooc_heldout_seed).sample(ho_ids, len(ho_ids))
+            treated = set(perm[:args.cooc_heldout_k])
+            treated_info = {"k": args.cooc_heldout_k, "seed": args.cooc_heldout_seed,
+                            "treated": sorted(treated, key=ops_mod.FUNC_ORDER.__getitem__),
+                            "untreated": sorted(set(ho_ids) - treated, key=ops_mod.FUNC_ORDER.__getitem__)}
+            untreated_task = lambda a: str(a[3].get("op_split")) == "test" and str(a[3].get("op")) not in treated
+            singles += [a for a in eligible if untreated_task(a)]
+            eligible = [a for a in eligible if not untreated_task(a)]
+            print(f"[ra-sft] --cooc_heldout_k={args.cooc_heldout_k}: treated {treated_info['treated']} "
+                  f"untreated {treated_info['untreated']} ({len(singles)} held-out tasks kept single-task)")
+        if args.multi_frac < 1.0:
+            rng.shuffle(eligible)
+            n_multi = int(round(args.multi_frac * len(eligible)))
+            singles += eligible[n_multi:]
+            eligible = eligible[:n_multi]
+            print(f"[ra-sft] --multi_frac={args.multi_frac}: {n_multi} atomic tasks eligible for grouping, "
+                  f"{len(singles)} single-task in total")
+        for prompt, skeleton, x, ei in singles:
+            add(prompt, skeleton, atomic_ground_truth(skeleton, x), ei, "atomic")
+        pool = eligible
         rng.shuffle(pool)
         n_reused = 0
         if args.partner_split != "any":
@@ -554,6 +591,9 @@ def main():
 
     rng.shuffle(rows)
     os.makedirs(args.out_dir, exist_ok=True)
+    if treated_info is not None:
+        with open(os.path.join(args.out_dir, "treated_ops.json"), "w") as f:
+            json.dump(treated_info, f, indent=1)
     val = rows[: args.val_size] if args.val_size > 0 else []
     train = rows[args.val_size:] if args.val_size > 0 else rows
     Dataset.from_list(train).to_parquet(os.path.join(args.out_dir, "train.parquet"))
