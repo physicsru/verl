@@ -138,6 +138,10 @@ def main():
     ap.add_argument("--comp_src", nargs="*", default=[],
                     help="stage-2 depth-2..4 TRAIN-op composition parquets (stage 1.5b multi-helper rows)")
     ap.add_argument("--comp_per_depth", type=int, default=4000, help="train rows per composition depth")
+    ap.add_argument("--comp_min_depth", type=int, default=2,
+                    help="ignore comp-source rows shallower than this. Guard against a level-1..4 source: "
+                         "the 2026-09-01 paper_alt build took 4,000 depth-1 rows from its comp source as "
+                         "'comps' (RESULTS_PROVENANCE issue #7)")
     ap.add_argument("--comp_val_per_depth", type=int, default=64,
                     help="held-out SFT-val rows per composition depth")
     ap.add_argument("--validate_e2e", type=int, default=32,
@@ -197,6 +201,7 @@ def main():
     if args.comp_src:
         by_depth = defaultdict(list)
         mention_counts = defaultdict(int)
+        n_shallow = 0
         for src in args.comp_src:
             df = pd.read_parquet(src)
             for _, row in df.iterrows():
@@ -207,9 +212,13 @@ def main():
                 bad = ids - TRAIN_FUNC_IDS
                 assert not bad, f"eval op(s) {sorted(bad)} in comp source {src} — must be --split train"
                 ei = dict(row["extra_info"]) if row["extra_info"] is not None else {}
+                if int(ei["depth"]) < args.comp_min_depth:
+                    n_shallow += 1
+                    continue
                 by_depth[int(ei["depth"])].append((ids, gt))
         print(f"[closedbook-cx] comp sources: "
-              + ", ".join(f"depth {d}: {len(v)}" for d, v in sorted(by_depth.items())))
+              + ", ".join(f"depth {d}: {len(v)}" for d, v in sorted(by_depth.items()))
+              + f" ({n_shallow} rows below --comp_min_depth={args.comp_min_depth} skipped)")
 
         need = args.comp_per_depth + args.comp_val_per_depth
         for depth in sorted(by_depth):

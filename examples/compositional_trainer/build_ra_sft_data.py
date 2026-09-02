@@ -380,6 +380,12 @@ def main():
                          "(base tasks stay unrestricted; per-op def counts unchanged). "
                          "'train' = held-out ops only ever co-occur with strong (composed) partners; "
                          "'test' = only with other held-out ops. (HISTORY §17 co-occurrence decomposition)")
+    ap.add_argument("--partner_reuse", action="store_true",
+                    help="with --partner_split: when the partner pool runs out, draw the missing partners "
+                         "again from the full partner list (with replacement across groups) instead of "
+                         "letting the remaining bases become single-task rows. Without it, eptr-style "
+                         "builds leave ~46%% of held-out tasks single-task (RESULTS_PROVENANCE issue #6). "
+                         "Raises the partner ops' atomic def counts; the build prints the audit stats.")
     ap.add_argument("--min_extra_tasks", type=int, default=0,
                     help="e.g. 1 with --max_extra_tasks 1 = every atomic answer has exactly 2 tasks (width-2)")
     ap.add_argument("--comp_structure", choices=["any", "serial"], default="any",
@@ -441,10 +447,12 @@ def main():
     else:
         pool = list(atomics)
         rng.shuffle(pool)
+        n_reused = 0
         if args.partner_split != "any":
             partners = [a for a in pool if str(a[3].get("op_split")) == args.partner_split]
             bases = [a for a in pool if str(a[3].get("op_split")) != args.partner_split]
             rng.shuffle(partners)
+            partner_src = list(partners)   # --partner_reuse draws from here once `partners` is spent
         while pool or (args.partner_split != "any" and (bases or partners)):
             if args.partner_split == "any":
                 base = pool.pop()
@@ -452,9 +460,21 @@ def main():
                 group = [base] + [pool.pop() for _ in range(k)]
             else:
                 # bases from the non-partner split first; leftover partners become single-task rows
+                # (unless --partner_reuse, which tops groups up from the full partner list)
+                from_bases = bool(bases)
                 base = bases.pop() if bases else partners.pop()
-                k = min(rng.randint(args.min_extra_tasks, args.max_extra_tasks), len(partners))
-                group = [base] + [partners.pop() for _ in range(k)]
+                k = rng.randint(args.min_extra_tasks, args.max_extra_tasks)
+                extra = [partners.pop() for _ in range(min(k, len(partners)))]
+                if args.partner_reuse and from_bases:
+                    # top up from the full partner list (with replacement across groups, never
+                    # the same task twice inside one group); leftover partners used as bases
+                    # after the bases are spent stay single-task as before
+                    while len(extra) < k:
+                        cand = partner_src[rng.randrange(len(partner_src))]
+                        if all(cand is not e for e in extra):
+                            extra.append(cand)
+                            n_reused += 1
+                group = [base] + extra
                 pool = bases + partners   # loop condition bookkeeping
             if k == 0:
                 prompt, skeleton, x, ei = base
@@ -545,6 +565,13 @@ def main():
           f"families={dict(fam)} verdicts={dict(verdicts)} "
           f"resp_chars(med/p90/max)={lens[len(lens)//2]}/{lens[int(len(lens)*0.9)]}/{lens[-1]} "
           f"-> train={len(train)} val={len(val)} @ {args.out_dir}")
+    if args.multi_atomic:
+        if args.partner_split != "any":
+            print(f"[ra-sft] --partner_split={args.partner_split} partner_reuse={args.partner_reuse}: "
+                  f"{n_reused} partner slots filled by re-drawn tasks")
+        # measured co-occurrence properties (what RESULTS_PROVENANCE section (3) quotes)
+        import audit_multi_atomic_data
+        audit_multi_atomic_data.audit(args.out_dir)
     if retried:
         print(f"[ra-sft] first-pass failures re-checked sequentially: {dict(retried)} "
               f"(load-induced timeouts recover here)")

@@ -112,7 +112,7 @@ launch_training() {
         -x LOG_VAL_GENERATIONS -x ROLLOUT_DATA_DIR \
         -x REVAL_BETA -x REVAL_K -x REVAL_REF_RESET_FREQ \
         -x REVAL_NORMALIZE_REWARD -x REVAL_BUFFER_SIZE \
-        -x KL_COEF -x CKPT_KEEP -x RA_EPISODE_BONUS \
+        -x KL_COEF -x CKPT_KEEP -x RA_EPISODE_BONUS -x EARLY_STOP_RESP_LEN \
         bash "${PBS_O_WORKDIR}/examples/compositional_trainer/train_per_node.sh"
 }
 

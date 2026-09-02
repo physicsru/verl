@@ -70,7 +70,11 @@ BUDGET_TAG="_b${ROLLOUT_MAX_TOKENS}"
 
 VARIANTS=$(echo "${ABL_VARIANTS:-d1+d12+d13+d14}" | tr '+,' '  ')
 TEST_SETS=$(echo "${ABL_TEST_SETS:-heldout}" | tr '+,' '  ')
-CI_TAG="$(echo "${VARIANTS}" | tr ' ' '_')${SEED_TAG}${BUDGET_TAG}"
+# CI md name carries the pool when it is not the default one: two pools running the
+# same ABL_VARIANTS used to overwrite each other's analysis/ci_ra_abl_<tag>.md
+# (RESULTS_PROVENANCE issue #1). Sweep dirs/ckpts were never affected (per-pool paths).
+POOL_TAG=""; [ "${POOL}" != "paper" ] && POOL_TAG="${POOL}_"
+CI_TAG="${POOL_TAG}$(echo "${VARIANTS}" | tr ' ' '_')${SEED_TAG}${BUDGET_TAG}"
 
 declare -A CI_ARGS   # test set -> "label=dir ..." list
 N_ROLLOUTS=0

@@ -1717,6 +1717,19 @@ class RayPPOTrainer:
                 )
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
+                # Optional guard against response-length blow-up (reward-hacking / policy collapse,
+                # cf. examples/compositional_trainer RL-E-co run 3279399: length 490 -> 4096 in 5
+                # steps while reward saturated). Stops the run so the last saved checkpoint stays
+                # pre-collapse; the collapsed step itself is not checkpointed.
+                early_stop_len = self.config.trainer.get("early_stop_response_len", None)
+                if early_stop_len and metrics.get("response_length/mean", 0) > early_stop_len:
+                    print(
+                        f"[early-stop] response_length/mean={metrics['response_length/mean']:.0f} > "
+                        f"trainer.early_stop_response_len={early_stop_len} at step {self.global_steps}; "
+                        "stopping training, last saved checkpoint is the survivor"
+                    )
+                    metrics["training/early_stop_response_len"] = 1.0
+                    is_last_step = True
                 # GDPO per-component reward metrics
                 gdpo_reward_keys = self.config.algorithm.get("gdpo_reward_keys", None)
                 if gdpo_reward_keys and self.config.algorithm.adv_estimator in ("gdpo", AdvantageEstimator.GDPO):

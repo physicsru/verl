@@ -125,6 +125,13 @@ if [[ -n "${CKPT_KEEP}" ]]; then
     COMMON_TRAINER+=("trainer.max_actor_ckpt_to_keep=${CKPT_KEEP}")
 fi
 
+# Length blow-up guard (reward-hacking collapse, RESULTS_PROVENANCE issue #2): stop the run
+# once a step's mean response length exceeds EARLY_STOP_RESP_LEN tokens; pair with a small
+# SAVE_FREQ so the surviving checkpoint is close to the collapse. Off when unset.
+if [[ -n "${EARLY_STOP_RESP_LEN:-}" ]]; then
+    COMMON_TRAINER+=("++trainer.early_stop_response_len=${EARLY_STOP_RESP_LEN}")
+fi
+
 if [[ "${RL_METHOD}" == "reval" ]]; then
     ENTRYPOINT="verl.trainer.main_reval"
     METHOD_ARGS=(
