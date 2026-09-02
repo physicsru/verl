@@ -1,8 +1,11 @@
 # Compositional generalization — results provenance & verification ledger
 
-Written 2026-09-02. Purpose: every claim below is traceable to a job log, data
-dir, checkpoint, and CI report so it can be re-verified in a fresh session
-without trusting summaries. **Read this before quoting any number.**
+Written 2026-09-02; **audited the same evening** (issues #5-7 below: every
+mean±sd was re-derived from the per-seed CI files by script, every job id
+mapped to its log, the co-occurrence data sets measured directly). Purpose:
+every claim below is traceable to a job log, data dir, checkpoint, and CI
+report so it can be re-verified in a fresh session without trusting summaries.
+**Read this before quoting any number.**
 
 Repo root: `/work/go39/b20033/code/generalization/verl` (all paths relative).
 Env: `source /work/go39/b20033/code/generalization_venv/bin/activate`.
@@ -19,6 +22,11 @@ grep -E '^\| [0-9] \|' analysis/ci_ra_abl_<cell>_b3072_trainops.md
 python examples/compositional_trainer/compositionality_index.py \
     --sweep <cell>=data/compositional/paper/ra_rft/ablation_sweep_<cell>_b3072 \
     --out /tmp/recheck.md
+# mean ± sd over seeds = population sd (ddof=0) of the three CI values, the
+# convention of analysis/ra_v2_campaign.md; parse the '| <depth> |' rows.
+# measured properties of the co-occurrence data sets quoted in section (3):
+python examples/compositional_trainer/audit_multi_atomic_data.py \
+    data/compositional/paper/ra_rft/sft_bootstrap_{eco,eptr,epho,pfirst,plast}
 ```
 Seed tags: base run = seed 1 (no tag); `_s7`,`_s123` for the others. Sweep
 dirs `ablation_sweep_<cell>[_s<seed>]_b3072`, CI `ci_ra_abl_<cell>[_s<seed>]_b3072.md`.
@@ -48,6 +56,36 @@ dirs `ablation_sweep_<cell>[_s<seed>]_b3072`, CI `ci_ra_abl_<cell>[_s<seed>]_b30
 4. **Single-seed cells** are marked (n=1) below — treat as directional only; the
    3-seed replication of C1–C5 (2026-09-01) already flipped one earlier n=1
    claim ("volume hurts", C3>C4), so do not publish n=1 orderings.
+5. **(AUDIT 2026-09-02) The first version of this ledger's MAIN-RESULT v1 row
+   was itself a victim of issue #1.** Its numbers (0.91±0.03 / 0.52±0.14 /
+   0.27±0.14 / 0.12±0.11) reproduce exactly from the overwritten
+   `ci_ra_abl_v1_b3072.md` (= the numfb run, job 3279397: a v1 trained from the
+   RE-TRAINED stage-1.5 `stage15b_num_frombase`) + s7 + s123 — not from the d14
+   ckpt the row cited. Corrected below to d14@3072
+   (`ci_trainops_sweep_ho_b3072.md`) + s7 + s123 = 0.92±0.05 / 0.53±0.15 /
+   0.24±0.11 / 0.09±0.05, which is what HISTORY §11/§13/§15, `eco_result.md`
+   and `ra_v2_campaign.md` already said. `doc/CLAUDE.md` had propagated the
+   wrong 0.52±0.14 — fixed the same day. Headline direction unchanged.
+6. **(AUDIT) ③ co-occurrence cells eptr / epho are CONFOUNDED and were
+   mislabelled.** Measured from the parquets (`audit_multi_atomic_data.py`):
+   eptr has held-out defs at the head of 100% of groups (not "mostly") AND only
+   54% of held-out atomic defs under load — 2,193/4,753 fell back to
+   single-task rows because the train-op partner pool ran out; epho has a
+   train op at the head of EVERY group (partners are not "held-out only":
+   4,494 train vs 5,488 held-out partner slots) and 100% of held-out defs
+   under load. pfirst/plast "forced" position is 61% (a group with several
+   held-out tasks cannot put all of them first). The reading "position, not
+   partner identity" is RETRACTED — see §③.
+7. **(AUDIT) ① name ablation is NOT an identical pipeline.** paper_alt
+   stage15b train = 36,000 rows vs paper 32,000: train ops have 1,048–1,412
+   depth-1 rows each vs a flat 800 (held-out 800 in both; comps 12,000 both);
+   the alt stage-1.5 ran 562 steps vs 500. RA data matched (25,723 rows).
+   Root cause (verified): `build_closedbook_codeexec.py` takes every depth
+   present in `--comp_src` at `comp_per_depth`=4,000; the alt build's comp
+   source contained depth-1 rows, so 4,000 single-op train-op rows were added
+   as "comps" (extra_info depth=1, op=single func; the 4,000 extra = exactly
+   one comp_per_depth). Rebuild with a depth-2..4 comp source (or a
+   `--comp_min_depth 2` filter) before replicating.
 
 ---
 
@@ -55,8 +93,18 @@ dirs `ablation_sweep_<cell>[_s<seed>]_b3072`, CI `ci_ra_abl_<cell>[_s<seed>]_b30
 
 | cell | held-out d2 / d4 / d6 / d8 (mean±sd) | seeds | jobs | ckpts | CI reports |
 |---|---|---|---|---|---|
-| **v1** (single-task atomics + 16k mixed d2-4 comps) | 0.91±0.03 / 0.52±0.14 / 0.27±0.14 / 0.12±0.11 | 1,7,123 | seed1 = d14 bootstrap (job 2490799, swept @3072 in 2553298); s7 = 2847939; s123 = 2847940 | `ra_sft_bootstrap_paper_qwen3_4b/global_step_400` (seed1=d14); `…_v1_s{7,123}` | `ci_ra_abl_v1_b3072.md`(=d14 sweep `trainops_sweep_d14_ho_b3072`), `ci_ra_abl_v1_s{7,123}_b3072.md` |
-| **E-co** (co-occurrence atomics + same 16k comps) | 1.00±0.00 / 0.97±0.02 / 0.89±0.09 / 0.73±0.15 | 1,7,123 | 3267112, 3267226, 3267227 | `ra_sft_bootstrap_paper_eco{,_s7,_s123}_qwen3_4b` | `ci_ra_abl_eco{,_s7,_s123}_b3072.md` |
+| **v1** (single-task atomics + 16k mixed d2-4 comps) | 0.92±0.05 / 0.53±0.15 / 0.24±0.11 / 0.09±0.05 | 1,7,123 | seed1 = d14 bootstrap (job 2490799, swept @3072 in 2553298); s7 = 2847939; s123 = 2847940 | `ra_sft_bootstrap_paper_qwen3_4b/global_step_400` (seed1=d14); `…_v1_s{7,123}_qwen3_4b/global_step_400` | seed1: `ci_trainops_sweep_ho_b3072.md` (d14 section, sweep `trainops_sweep_d14_ho_b3072`); `ci_ra_abl_v1_s{7,123}_b3072.md`. **Not** `ci_ra_abl_v1_b3072.md` (issue #1/#5) |
+| **E-co** (co-occurrence atomics + same 16k comps) | 1.00±0.00 / 0.97±0.02 / 0.89±0.09 / 0.73±0.15 | 1,7,123 | 3267112, 3267226, 3267227 | `ra_sft_bootstrap_paper_eco{,_s7,_s123}_qwen3_4b/global_step_308` | `ci_ra_abl_eco{,_s7,_s123}_b3072.md` |
+
+Per-seed d2/d4/d6/d8 — v1: d14 0.984/0.746/0.395/0.160, s7 0.910/0.434/0.180/0.039,
+s123 0.875/0.410/0.156/0.059; E-co: s1 1.000/0.980/0.934/0.832, s7
+1.000/1.000/0.969/0.844, s123 1.000/0.945/0.762/0.520. Both cells share the init
+`stage15b_paper_closedbook_cx_qwen3_4b/global_step_500`, 2 epochs, batch 128,
+constant LR 2e-5 (v1 400 steps over 25,723 rows; E-co 308 over 19,719 — fewer
+rows because 1–4 atomic tasks share one row). A 4th v1-recipe sample exists
+(numfb, job 3279397, seed 1 from a RE-TRAINED stage-1.5): 0.953/0.711/0.473/0.277,
+the best v1 d8 ever — excluded from the mean because its init differs; it shows
+the stage-1.5 seed is a variance source of its own.
 
 Data: E-co train parquet `data/compositional/paper/ra_rft/sft_bootstrap_eco/`,
 built by `build_ra_sft_data.py --multi_atomic` (each atomic answer holds U{0..3}
@@ -78,7 +126,10 @@ bodies from train ops).
 ## C1–C5 CAUSAL TABLE (single-variable around E-co; 3 seeds each)
 
 All share E-co's co-occurrence atomics; only the composition set varies.
-Jobs: base seed = 3274458-62; s7 = 3275724/26/28/30/32; s123 = 3275739-43.
+Jobs: base seed = C2 3274459, C4 3274461, C1/C3/C5 3275134/3275135/3275136
+(3274458/60/62 left no log — resubmitted); s7 = 3275724/26/28/30/32; s123 =
+3275739-43. Training length (2 epochs, batch 128, constant LR): C1 58 steps,
+C2/C3 90, C4/C4b 252, C5 1,034, E-co 308, v1 400.
 Data dirs `data/compositional/paper/ra_rft/sft_bootstrap_c{1..5}/`. Report
 `analysis/ablation_c1c5.md` (has the 3-seed section).
 
@@ -93,42 +144,66 @@ Data dirs `data/compositional/paper/ra_rft/sft_bootstrap_c{1..5}/`. Report
 | E-co | 16k mixed d2-4 | 0.97±0.02 | 0.73±0.15 | best + lowest variance |
 
 C4b jobs: base 3278552, s7 3279487, s123 3279488. C4 failure classification
-`analysis/c4_failures.md` (d8 failures = 62% episode-omission → d3-4 data fixes
-episode-count extrapolation, a mechanical/length effect).
+`analysis/c4_failures.md`: at d8, 159/256 problems (62% of all, 70% of the 227
+failures) have incomplete recall (episode omission), so d3-4 data mostly fixes
+episode-count extrapolation — but C4's per-episode TypeError rate is still
+13.8% at d8 (E-co 0.6%), i.e. the name→def collapse is only partly gone in C4.
 
 **Established, publishable (3-seed):** (i) co-occurrence ≫ frequency (E-co vs
 v1, C5 vs v1); (ii) composition without composition data is real (C1);
-(iii) structure diversity > volume (C3 vs C2/C4); (iv) depth diversity is the
-dominant comp-side factor (C4b, E-co vs C4).
+(iii) structure diversity matters (C3 vs C2, positive in all 3 seed pairs)
+while volume at fixed diversity is ~neutral (C4 vs C3, 0.70±0.03 vs
+0.77±0.11); (iv) depth diversity is the dominant comp-side factor (C4b vs C4,
+non-overlapping bands; E-co vs C4).
 
 ---
 
-## ③ CO-OCCURRENCE STRUCTURE: partner identity vs position
+## ③ CO-OCCURRENCE STRUCTURE: partner identity vs position — INCONCLUSIVE (audited)
 
 `--partner_split` restricts held-out ops' partners; `--heldout_position` pins
-held-out tasks to group head/tail (both in `build_ra_sft_data.py`; smokes 0
-violations). Comps fixed at 16k d2-4.
+held-out tasks to group head/tail (both in `build_ra_sft_data.py`). Comps fixed
+at 16k d2-4. The table carries the **measured** properties of each data set
+(`python examples/compositional_trainer/audit_multi_atomic_data.py …`), not
+the intended ones — they differ (issue #6).
 
-| cell | held-out partners | held-out position | d4 / d8 | seeds | jobs |
-|---|---|---|---|---|---|
-| eptr | train ops only | (mostly head) | 0.53±0.07 / 0.11±0.02 | 1,7,123 | 3278550,3279489,3279490 |
-| epho | held-out only | (mostly tail) | 0.83±0.03 / 0.46±0.17 | 1,7,123 | 3278551,3279491,3279492 |
-| pfirst | random | HEAD (forced) | 0.88±0.11 / 0.59±0.20 | 1,7 | 3279504,3279505 |
-| plast | random | TAIL (forced) | 0.98±0.01 / 0.73±0.08 | 1,7 | 3279506,3279507 |
-| E-co | random | random | 0.97±0.02 / 0.73±0.15 | 1,7,123 | (above) |
+| cell | held-out defs under load | held-out at head / mid / tail | partner slots train : held-out | d4 / d8 | seeds | jobs |
+|---|---|---|---|---|---|---|
+| eptr | **54%** (2,193/4,753 single-task) | **100%** / 0 / 0 | 4,814 : 0 | 0.53±0.07 / 0.11±0.02 | 1,7,123 | 3278550,3279489,3279490 |
+| epho | 100% | 0 / 47% / 53% | 4,494 : 5,488 (a train op heads every group) | 0.83±0.03 / 0.46±0.17 | 1,7,123 | 3278551,3279491,3279492 |
+| pfirst | 90% | 61% / 30% / 9% | 4,668 : 3,968 | 0.88±0.11 (0.762, 0.992) / 0.59±0.20 | 1,7 | 3279504,3279505 |
+| plast | 90% | 9% / 30% / 61% | same groups as pfirst, reordered | 0.98±0.01 (0.965, 0.988) / 0.73±0.08 | 1,7 | 3279506,3279507 |
+| E-co | 90% | 36% / 31% / 33% | 4,668 : 3,968 | 0.97±0.02 / 0.73±0.15 | 1,7,123 | (above) |
 
-Reading (PRELIMINARY, pfirst/plast n=2): the driver is **position, not partner
-identity** — plast ≈ E-co ≫ pfirst; practising the held-out def in the hard
-(late) position is what matters. NEEDS: pfirst/plast seed 123 (pfirst sd is
-±0.20). Data dirs `sft_bootstrap_{eptr,epho,pfirst,plast}`.
+Why the labels were wrong: with `--partner_split train` every held-out task is
+a group *base* (always first) and draws U{0..3} train partners; the ~5k train
+atomic tasks are exhausted before the ~4.8k held-out bases, so late bases get
+k=0 → 46% of held-out practice is single-task (the v1 regime). With
+`--partner_split test` the bases are train tasks, so a train op heads every
+group and held-out tasks fill positions 1-3. `--heldout_position first|last`
+only reorders within a group, so with several held-out tasks per group only
+61% can be at the pinned end.
+
+Reading (audit 2026-09-02): only pfirst/plast is a clean pair (identical
+groups, reordered); it *suggests* late position helps (d4 0.98 vs 0.88, d8
+0.73 vs 0.59) but one pfirst seed (0.992) equals plast, so n=2 does not
+establish it. eptr changes three things at once (always-head, train-only
+partners, half the under-load practice) — its 0.53 cannot be attributed to
+position. epho (0% head) at 0.83 sits well below plast (9% head) at 0.98, so
+partner composition and/or group structure matters too. The earlier reading
+"position, not partner identity" is **retracted**. NEEDS: pfirst/plast seed
+123; eptr rebuilt with a large enough train partner pool (≥90% under load,
+matched to E-co); an epho variant without the train-op head (held-out-only
+groups); ideally the 2×2 partner × position at matched load. Data dirs
+`sft_bootstrap_{eptr,epho,pfirst,plast}`.
 
 ---
 
 ## ① NAME ABLATION (digit-token neighbour confusion)
 
-Controlled pair, both from Qwen3-4B-Base, identical pipeline, only the opaque
-op-name scheme differs (`COMPOSITIONAL_NAME_SCHEME` in `operators.py`:
-num=`func_10`, alt=`func_qzk`). PRELIMINARY (n=1 each).
+Intended as a controlled pair, both from Qwen3-4B-Base, same pipeline, only
+the opaque op-name scheme differing (`COMPOSITIONAL_NAME_SCHEME` in
+`operators.py`: num=`func_10`, alt=`func_qzk`). PRELIMINARY (n=1 each) and,
+per the 2026-09-02 audit, NOT data-matched at stage 1.5 (issue #7).
 
 | naming | held-out d2 / d4 / d6 / d8 | stage15b job | RA-v1 job | ckpt | CI report |
 |---|---|---|---|---|---|
@@ -138,12 +213,23 @@ num=`func_10`, alt=`func_qzk`). PRELIMINARY (n=1 each).
 Data lines: num = `data/compositional/paper/…` (existing); alt =
 `data/compositional/paper_alt/…` (regenerated with alt names). To evaluate/
 regenerate the alt CI you MUST set `COMPOSITIONAL_NAME_SCHEME=alt` in the env.
+Stage-1.5 data (audited): num `paper/stage15b_closedbook_codeexec/train.parquet`
+= 32,000 rows (800 depth-1 rows per op × 25 + 12,000 d2-4 train-op comps; 500
+steps); alt `paper_alt/stage15b_closedbook_codeexec/train.parquet` = **36,000**
+rows (train ops 1,048–1,412 depth-1 rows each, held-out ops 800, comps 12,000;
+562 steps; RA init `stage15b_alt_frombase_qwen3_4b/global_step_562`). RA data IS
+matched (25,723 rows, seed 1, 400 steps). The two test sets share skeletons
+(identical k per depth).
 
-**Finding (needs replication + chimera classification):** non-numeric names
-raise held-out d8 from 0.28 → 0.90 — supports "collapse is largely digit-token
-neighbour confusion (func_10↔func_11)". TODO before publishing: 2 more seeds
-each; run `classify_ra_failures.py` on the alt sweep to confirm chimera
-collapse actually disappears (not just accuracy up).
+**Finding (n=1, confounded — do not quote as a result yet):** with letter
+names held-out d8 is 0.90 vs 0.28 — consistent with "collapse is largely
+digit-token neighbour confusion (func_10↔func_11)", but (a) stage-1.5 data is
+unmatched (issue #7), (b) the num run's 0.28 is itself the highest v1 d8 ever
+seen (the three original v1 seeds: 0.16/0.04/0.06), so the stage-1.5 seed is a
+variance source of its own, and (c) there is no chimera classification on the
+alt sweep yet. Before publishing: rebuild paper_alt stage15b at 800/op and
+retrain; ≥3 RA seeds per scheme (num seeds 7/123 from
+`stage15b_num_frombase`); `classify_ra_failures.py` on both sweeps.
 
 ---
 
@@ -153,9 +239,16 @@ Job 3279399 `rl-ecorl.o3279399`. Pool
 `data/compositional/paper/structured/pool_w14d/train.parquet` (parmt widths 1-4,
 all 25 ops, split=train). Prefilter 3278553. Init = v1 d14 ckpt. Trajectory:
 step0 d4 0.75 → step20 0.96 → step40 0.96 → **step60 0.14 (collapse)**.
-Ckpts `rl_ra_grpo_w14_v1init_ecorl_qwen3_4b/global_step_{50,…}` (step-50 is
-POST-collapse; the good ckpt would be ~step-40, not saved at that freq —
-rerun with save_freq=20 + early stop).
+Full val trajectory (greedy, from the log): held-out d4/d8 0.750/0.164 (step
+0) → 0.965/0.691 (20) → 0.961/0.660 (40) → 0.145/0.062 (60, 80, 100); rlops
+d8 0.883 → 0.867 → 0.859 → 0.117; probe d8 0.844 → 0.824 → 0.812 → 0.080.
+Collapse onset: `response_length/mean` 490 tokens at step 43 → 603 (44) →
+1,264 (45) → 2,523 (46) → 3,915 (47) → the 4,096 cap by step 58 (clip_ratio
+1.0), while `critic/score/mean` rises 0.56 → 1.19 over steps 43-49. Ckpts
+`rl_ra_grpo_w14_v1init_ecorl_qwen3_4b/global_step_{50,100}` are both
+POST-collapse (step 50 already at reward 1.19 / length 4,083); a usable ckpt
+must be ≤ step 43 — rerun with save_freq=10, an early stop on response length
+or held-out val, and stronger KL.
 
 ---
 
@@ -174,8 +267,13 @@ Canonical logs: `examples/compositional_trainer/WALKTHROUGH.md` §1-21;
 
 ## OUTSTANDING (for the next session)
 
-- [ ] name ablation: +2 seeds each (num/alt); chimera classification on alt sweep.
-- [ ] RL-E-co: re-eval step-40 ckpt; rerun with save_freq=20 + early stop / higher KL.
+- [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
+      defs under load (larger train partner pool); epho variant without the
+      train-op head; 2×2 partner × position at matched load.
+- [ ] ① name ablation: rebuild paper_alt stage15b with a depth-2..4 comp
+      source (root cause in issue #7), retrain; ≥3 RA seeds per scheme; chimera
+      classification on both sweeps.
+- [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
+      held-out val + stronger KL; re-eval the last pre-collapse ckpt.
 - [ ] 8B line: fix HF export (sharded save or offline convert), then v1-8b / eco-8b.
-- [ ] ③ position: pfirst/plast seed 123.
 - [ ] give alt-line jobs a distinct ABL tag so CI md never collides again.
