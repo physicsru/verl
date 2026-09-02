@@ -612,3 +612,137 @@ Note the funcless failures are themselves seed-dependent (d1/d13b/d14 keep
 them at 1.000; d12 and seed-42 d13 partially lose them) — preservation of the
 pre-SFT behavior on these OOD rows is not systematic. (Fixable data gap: add
 funcless-skeleton rows to the stitcher.)
+
+---
+
+## 17. RA-v2 stitcher campaign — a regression, and why (2026-08-25)
+
+Spec `doc/COMPOSITIONAL_HISTORY.md` §10; full report
+`analysis/ra_v2_campaign.md`; classification
+`analysis/ra_v2_failure_classification.md` (`classify_ra_failures.py`).
+Same init/recipe/def bodies; only the answer STRUCTURE changed. v1/v2/v2_sc
+× 3 SFT seeds (v1 seed 1 = d14), both test sets, greedy @3072
+(jobs 2847832-34, 2847939-40).
+
+| held-out CI, 3-seed mean ± sd | d2 | d3 | d4 | d6 | d8 |
+|---|---|---|---|---|---|
+| v1 | 0.92 ± 0.05 | 0.75 ± 0.12 | 0.53 ± 0.15 | 0.24 ± 0.11 | 0.086 ± 0.05 |
+| v2 | 0.85 ± 0.14 | 0.72 ± 0.18 | 0.49 ± 0.17 | 0.09 ± 0.03 | 0.004 |
+| v2_sc | 0.94 ± 0.05 | 0.78 ± 0.07 | 0.51 ± 0.08 | 0.12 ± 0.05 | 0.009 |
+| train-op d8 | v1 0.875 ± 0.02 | v2 0.070 ± 0.04 | v2_sc 0.060 ± 0.01 | | |
+
+1. **d14 (§15) was a lucky seed**: v1 seeds 7/123 give d4 = 0.43/0.41 (d14
+   0.75), d8 = 0.04/0.06 (0.16). Honest v1 = the band above. Train-op depth
+   extrapolation (0.85-0.91 at d8) is seed-robust.
+2. **v2 collapses beyond the trained depth, even on train ops** (d6 0.60 vs
+   0.98, d8 0.07 vs 0.88). Each structural change replaced a depth-invariant
+   mechanical step by a PARSING task whose error grows with nesting, and the
+   model then executes its own wrong parse:
+   - ① enumerated plan line: plan incompleteness 0% at k ≤ 3 → 47/70/82% at
+     d6/7/8 (train-op d8 89%); ~90% of omitted funcs also unrecalled. v1
+     omission at d8: 3%. Omission moved upstream and got 30× worse.
+   - ② arity cue: per-episode TypeError rate at d8 v1 0.07/0.16/0.22 vs v2
+     0.32/0.24/0.33 — 1,388 of 1,404 wrong-arity defs sit under a cue whose
+     own count is wrong; cue error 3.8% (d2) → 31% (d8), 89% of them where
+     the argument subtree contains commas. **A1 refuted**: restating the call
+     site does not fix the signature mode; counting top-level args IS the
+     hard part.
+   - ③ sequential Assemble: `assembly_wrong` (model's chain wrong even with
+     reference defs) 43-101/256 on held-out vs v1 paren-copy syntax errors
+     7-32/256. Verbatim copy scales, SSA rewriting does not.
+   - ④ self-check: v2_sc ≥ v2 everywhere (small), not separable from the
+     broken base. Funcless rows fixed the d1 artifact (v2 d1 = 1.000 all
+     seeds; v1 seeds 7/123 lose 2-3%).
+3. **Decision (§10.6 negative branch)**: stop format work; RA-v1 stays;
+   next = operator diversity on the v1 format, 3 seeds, both sets @3072.
+   Rule learned: any k-dependent transformation in the answer must be
+   assumed not to extrapolate past the trained k — check train-op d5-8
+   FIRST, it detects broken extrapolation cheaply (v2 fails it at d5).
+
+---
+
+## 18. RL on the RA format — the meta-composition test (2026-08-29/30)
+
+Hypothesis (user): GRPO on train-op compositions learns a transferable
+composition procedure rather than memorizing compositions. Setup:
+`run_rl_ra.sh` / `reward_fn_codeexec_ra.py` / `build_rl_ra_data.py`; 3 of the
+13 train ops held out of every RL composition as PROBE ops; val families
+heldout / rlops / probe (`data/compositional/paper/rl_ra/val`); GRPO 64×8,
+KL 0.01, RA reward = correctness + 0.2 × episode-unit-test fraction.
+Saturation guard: the RA-v1 init is 100% at T=1 on train-op d2-4 (14 mixed
+prompts of 15k), so no gradient exists at the SFT depth from that init.
+
+| line | init | RL depth | rlops d8 | probe d8 | heldout d4 | heldout d8 | report |
+|---|---|---|---|---|---|---|---|
+| A (3208916, stopped @80) | RA-v1 | 7-10 | 0.88→1.00 | 0.84→0.99 | 0.75→0.66 | 0.16→0.11 | `analysis/rl_ra_grpo_d7to10.md` |
+| B (3242468 + 3255766, 165 steps) | RA-d12 | 1-4 | 0.37→0.92 | 0.22→0.81 | 0.73→0.46 | 0.12→0.10 | `analysis/rl_ra_grpo_d1to4_d12init.md` |
+
+Three runs agree: RL lifts every op that has ever been practiced inside a
+composition (RL ops; probe ops via their SFT depth-2 exposure), extrapolates
+that lift to untrained depths (B: d12 0.08→0.62 from depth-1-4 practice) —
+and never touches, then squeezes, the ops known only atomically. The
+procedure is learned; it operates only on representations that composition
+practice already shaped. RL line closed; next = operator diversity.
+
+---
+
+## 19. The mechanism, the ceiling, and E-co (2026-08-30/31)
+
+Full chain: `analysis/heldout_failure_mechanism.md` (name→def bindings collapse
+onto composed neighbours under multi-def load; 1,102/1,175 chimera bodies come
+from train ops; train-op defs appear 10× more often and 85% in multi-def
+contexts vs held-out 0%), `analysis/ci_decomposed_v1.md` (decomposed inference
+— each helper in its own forward pass — is 1.000 at EVERY depth on BOTH sets:
+the gap is 100% retrieval under load), `analysis/eco_result.md` (**E-co**: the
+user's intervention — atomic rows grouped with U{0..3} unrelated atomic tasks,
+frequencies unchanged, no composition — held-out d2-8 = 1.000/0.997/0.975/
+0.944/0.888/0.787/0.732 over 3 seeds vs v1 0.923/0.749/0.530/0.380/0.244/
+0.135/0.086; ≈ train-op at every depth). Tools: `rollout_decomposed.py`,
+`build_ra_sft_data.py --multi_atomic`, `classify_ra_failures.py`.
+
+## 20. Minimal primitives and the structure-extrapolation map (2026-08-31)
+
+Width-2 parallel + depth-2 serial as the only training structures; SFT vs RL
+(GRPO from the atomic-only init); evaluation on the structured map (serial
+d1-8, parallel w1-8 in two formats, grids; held-out & train-op ops).
+`analysis/minimal_primitives.md` + `analysis/structured_map_round{1,2,3}.md`;
+tools `generate_structured.py` / `score_structured.py` /
+`run_structured_sweep.sh`; RL driver knobs RL_POOL_FILE / RL_VAL_FILES.
+Headlines: RL installs both primitives from reward alone (no SFT); RL-installed
+serial extrapolates d2→d8 (0.90 train-op) and composes with width into unseen
+`+`-expressions (w8 0.98) and grids (w4d4 0.91) where every SFT-primitive
+variant is ≈0; width extrapolates only from pairs-only SFT (p0b w8 0.72) or
+RL-extended SFT (exp2 0.95) and is killed by mixing serial into the SFT
+(p1b 0.02) or by RL-from-scratch (exp1 w3+ = 0); mixed-size RL from scratch is
+the worst curriculum (serial 3× slower, width never found, exp3). E-co still
+dominates the whole map except deep multi-task grids.
+
+---
+
+## 19-21. Phase-transition mechanism, minimal primitives, and the C1-C5 causal table (2026-08-30 → 09-01)
+
+§19 (mechanism): `analysis/heldout_failure_mechanism.md` — held-out failures
+collapse onto composed name-neighbour train ops under multi-def load;
+decomposed inference (`rollout_decomposed.py`) = 1.000 everywhere → the gap
+is 100% retrieval-under-load. **E-co** (atomic rows grouped into 1-4
+independent tasks per answer, frequencies unchanged; `--multi_atomic`) →
+held-out d4 0.975 ± 0.02, d8 0.73 ± 0.15 (3 seeds), ≈ train-op at every
+depth. `analysis/eco_result.md`.
+
+§20 (structure map + RL on primitives): `generate_structured.py` /
+`score_structured.py` / `run_structured_sweep.sh`; maps in
+`analysis/structured_map_round{1,2,3}.md`. RL from the atomic-only init
+(`run_rl_ra.sh`, structured pools): serial installable from reward alone in
+20 steps and depth-extrapolates; multi-task width installable but does NOT
+extrapolate beyond trained width; mixing hard sizes slows bootstrap 4×
+(exp3) and its late width takeoff CRUSHES serial deep + size-1 basics —
+skills interfere inside RL where SFT keeps them compatible. SFT-then-RL
+(exp2) fixes the width cliff in 20 steps. Full budgets honored (exp1 400,
+exp2 200 = 10 epochs, exp3 400; jobs 3271797/3271798/3273779).
+
+§21 (C1-C5): `analysis/ablation_c1c5.md`. Frequency ×10 does nothing (C5 ≈
+v1); co-occurrence with zero comps reaches d4 0.74 (C1); structure diversity
+at fixed count/depth is worth +0.30 d4 (C3 vs C2); more same-depth comps
+HURT (C4 < C3); depth diversity rescues volume (E-co vs C4). What matters:
+practice under competition + a small, structurally and depth-diverse set of
+composition demonstrations. Single-seed caveats noted in the report.

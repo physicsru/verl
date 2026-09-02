@@ -50,6 +50,7 @@ tractable.
 | `_sft_launch.sh` / `_rollout_launch.sh` | per-node **SFT** (FSDP) / **RFT rollout** (vLLM) primitives; launched by `launch_mpi` |
 | `build_sft_data.py` / `train_stage1_sft.sh` | **SFT** Stage-1 (8-node FSDP): synthetic-trace data → SFT |
 | `rollout_stage1.py` / `build_rft_data.py` / `run_stage1_rft.sh` | **RFT** Stage-1 (8-node, paper's recipe): iterative data-parallel rollout → keep-correct → FSDP SFT |
+| `build_ra_sft_data.py` / `build_ra_rft_data.py` / `build_ra_elicit_data.py` / `run_ra_depth_ablation.sh` / `run_ra_rft.sh` / `classify_ra_failures.py` | **recall-then-assemble (RA)**: stitched bootstrap-SFT targets (`--format v1\|v2`, `--self-check`), verification gate, elicitation prompts, variant/seed driver, sweep failure classifier (WALKTHROUGH §14-17, `doc/COMPOSITIONAL_HISTORY.md` §10-11) |
 | `build_codeexec_data.py` / `reward_fn_codeexec.py` / `run_stage1_rft_codeexec.sh` / `train_stage2_codeexec.sh` | **one-shot code-exec condition**: plan → ONE program, executed once at reward time (see [`README_codeexec.md`](README_codeexec.md)) |
 
 **Stage-1 method.** The paper acquires atomic skills via **iterative RFT**, not
@@ -92,6 +93,30 @@ POOL=paper MODEL_PATH=checkpoints/compositional/stage1_paper_grpo_qwen3_4b/globa
 # value-based off-policy instead of GRPO:
 RL_METHOD=reval POOL=lenpres MODEL_PATH=<stage1_ckpt> \
   qsub examples/compositional_trainer/train_stage2.sh
+```
+
+### Recall-then-assemble (RA) bootstrap SFT
+
+The best held-out result (WALKTHROUGH §14-15) is ONE SFT on *stitched* RA
+targets from the stage-1.5 checkpoint — no RL, no RFT. `build_ra_sft_data.py`
+stitches them; every row passes the RFT gate (`build_ra_rft_data.check_response`).
+
+```bash
+CT=examples/compositional_trainer
+# v2 format (COMPOSITIONAL_HISTORY §10.3): enumerated plan line, per-episode
+# arity cue from the call site, sequential Assemble (t1 = ...; return tN),
+# funcless rows; --self-check adds `Check: func_N(probe) -> out` after each def.
+python $CT/build_ra_sft_data.py \
+    --comp_path   data/compositional/paper/stage2_level1to4_codeexec/train.parquet \
+    --atomic_path data/compositional/paper/stage15_closedbook_codeexec/train.parquet \
+    --out_dir     data/compositional/paper/ra_rft/sft_bootstrap_v2 \
+    --format v2 [--self-check] --n_comp 16000 --n_atomic 10000 --n_funcless 1500
+# --format v1 (--n_funcless 0 default) = the original §14 data.
+
+# SFT from stage15b + greedy d1-8 sweep + CI, one job per (variant list, seed);
+# data dir = ra_rft/sft_bootstrap_<variant>:
+qsub -N ra-v2-s1 -v ABL_VARIANTS=v2+v2_sc,SFT_SEED=1,ABL_TEST_SETS=heldout+trainops \
+    $CT/run_ra_depth_ablation.sh     # ROLLOUT_MAX_TOKENS default 3072
 ```
 
 ### RL method switch
