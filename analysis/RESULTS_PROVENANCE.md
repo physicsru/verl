@@ -368,6 +368,74 @@ rise above this band. (Groups report missing for sub0-9 jobs submitted before th
 
 ---
 
+## H0/H1 RESULTS (2026-09-03, 3 seeds per cell unless noted; dose25 pending)
+
+All cells: E-co recipe on the RFT-cx-initialised stage-1.5 (issue #9), greedy @3072,
+held-out test set. Whole-model numbers from `ci_ra_abl_<cell>[_s*]_b3072.md`; per-op
+episode-ok from `cls_ra_abl_<cell>*.md` (`summarize_subset_transfer.py` prints the table);
+program-level treated/untreated accuracy in `ci_ra_abl_<cell>*_groups.md`.
+
+**Subset transfer** (K of 12 held-out ops get co-occurrence practice; treated set nested:
+K=3 func_2/6/18, K=6 + func_7/8/21, K=9 + func_10/12/16; untreated at K=9 = func_0/14/24):
+
+| K | held-out d4 | d8 | treated ops episode-ok | untreated ops episode-ok | untreated − sub0 (paired by op, seeds 1/7/123) |
+|---|---|---|---|---|---|
+| 0 (sub0) | 0.50±0.06 | 0.12±0.04 | — | 0.80 | 0 |
+| 3 (sub3) | 0.51±0.07 | 0.09±0.05 | 0.96 | 0.74 | **−0.07** (−0.12/−0.08/−0.01) |
+| 6 (sub6) | 0.75±0.14 | 0.37±0.17 | 0.98 | 0.84 | +0.05 (0.00/+0.12/+0.03) |
+| 9 (sub9) | 0.82±0.07 | 0.39±0.17 | 0.98 | 0.82 | **+0.10** (+0.17/+0.05/+0.09) |
+| 12 (eco) | 0.97±0.02 | 0.73±0.15 | 0.99 | — | — |
+
+Program-level (programs whose held-out ops are ALL untreated, pooled d2-8): sub3 0.63 /
+0.71 / 0.84, sub6 0.90 / 0.95 / 0.93, sub9 1.00 / 0.94 / 0.96 (n shrinks with K).
+Verdict vs the pre-registration: H1 asked for ≥ +0.15 on untreated ops from K=0 to K=9
+with 3 seeds in the same sign; observed +0.10, same sign in all 3 seeds. K=3 is
+negative in all 3 seeds. Reading: **transfer exists but is weak and late** — untreated ops
+gain only once most other ops are treated, and a small treated set makes the rest worse
+(strengthened bindings act as attractors, cf. mechanism doc). Practically H0: at K=9 the
+untreated ops still sit at 0.82 vs 0.98 treated, i.e. per-op practice remains necessary.
+
+**Names** — refuted (§①): v1 under num/alt/alt2 = 0.52 / 0.46 / 0.37 at d4; E-co lifts all
+three alike.
+
+**Operator diversity** (E-co atomics; comps from N train ops, 16k d2-4 fixed):
+
+| N composed train ops | held-out d4 | d8 | jobs |
+|---|---|---|---|
+| 0 (C1, no comps) | 0.66±0.14 | 0.08±0.04 | (C1) |
+| 4 (nops4) | 0.55±0.03 (0.59/0.52/0.53) | 0.14±0.02 | 3284502-04 |
+| 8 (nops8) | 0.79±0.09 (0.91/0.71/0.75) | 0.40±0.18 | 3284505-07 |
+| 13 (eco) | 0.97±0.02 | 0.73±0.15 | — |
+
+Verdict: held-out rises monotonically with N from 4 to 13 with non-overlapping bands
+(4 vs 8 vs 13) — the H1 prediction on this axis (composition data on MORE distinct ops
+transfers better to unseen ops). N=4 sits below N=0 but the bands overlap (C1 seed 7 =
+0.46), so "a few composed ops hurt" is suggestive only.
+
+**Dose** (fraction of atomic tasks that enter grouping; measured under-load share of
+held-out defs from `audit_multi_atomic_data.py`):
+
+| nominal | held-out defs under load | held-out d4 | d8 | jobs |
+|---|---|---|---|---|
+| 0 (v1) | 0% | 0.53±0.15 | 0.09±0.05 | — |
+| 25 (dose25) | 21% | pending (3284632/34/35, queued: cluster has no free nodes) | | |
+| 50 (dose50) | 45% | 0.83±0.13 (0.92/0.93/0.66) | 0.41±0.15 | 3284496-98 |
+| 75 (dose75) | 66% | 0.91±0.10 (0.78/0.98/0.98) | 0.62±0.18 | 3284499-501 |
+| 100 (eco) | 90% | 0.97±0.02 | 0.73±0.15 | — |
+
+Verdict: concave — 45% of the practice already buys ~2/3 of the E-co gain at d4. eptr
+(54% under load, held-out always at head, train-only partners) = 0.53 sits FAR below this
+curve (dose50 0.83), so eptr's deficit is NOT the load fraction: position and/or partner
+composition does matter after all (§③ stays open, but its confound list shrinks).
+
+**Overall.** The composition procedure transfers; the per-op binding must still be
+installed under load for (nearly) every op — a general "robust retrieval" skill emerges
+only weakly and only after most ops have been practised. What does scale favourably is
+the *diversity* of composed ops and the *fraction* of practice under load, not the
+naming. Init caveat (#9) applies to every number above.
+
+---
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
@@ -375,9 +443,8 @@ rise above this band. (Groups report missing for sub0-9 jobs submitted before th
       train-op head; 2×2 partner × position at matched load.
 - [x] ① name ablation, matched: done 2026-09-03 (refuted, all 3 seeds × 3 schemes
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
-- [ ] H0/H1 cells: 27 jobs queued (ids above); when done, read
-      `ci_ra_abl_sub*_groups.md` + `cls_ra_abl_sub*.md` (untreated ops), dose and
-      nops CI tables; 3-seed bands per the decision rule.
+- [x] H0/H1 cells: 24/27 done and written up ("H0/H1 RESULTS"); dose25 ×3 pending
+      (3284632/34/35). When in: fill the dose table, update the summary sentence.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
