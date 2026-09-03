@@ -368,7 +368,7 @@ rise above this band. (Groups report missing for sub0-9 jobs submitted before th
 
 ---
 
-## H0/H1 RESULTS (2026-09-03, 3 seeds per cell unless noted; dose25 pending)
+## H0/H1 RESULTS (2026-09-03, 3 seeds per cell; complete)
 
 All cells: E-co recipe on the RFT-cx-initialised stage-1.5 (issue #9), greedy @3072,
 held-out test set. Whole-model numbers from `ci_ra_abl_<cell>[_s*]_b3072.md`; per-op
@@ -418,15 +418,17 @@ held-out defs from `audit_multi_atomic_data.py`):
 | nominal | held-out defs under load | held-out d4 | d8 | jobs |
 |---|---|---|---|---|
 | 0 (v1) | 0% | 0.53±0.15 | 0.09±0.05 | — |
-| 25 (dose25) | 21% | pending (3284632/34/35, queued: cluster has no free nodes) | | |
+| 25 (dose25) | 21% | 0.75±0.15 (0.56/0.75/0.93) | 0.46±0.20 (0.25/0.41/0.74) | 3284632/3284634/3284635 |
 | 50 (dose50) | 45% | 0.83±0.13 (0.92/0.93/0.66) | 0.41±0.15 | 3284496-98 |
 | 75 (dose75) | 66% | 0.91±0.10 (0.78/0.98/0.98) | 0.62±0.18 | 3284499-501 |
 | 100 (eco) | 90% | 0.97±0.02 | 0.73±0.15 | — |
 
-Verdict: concave — 45% of the practice already buys ~2/3 of the E-co gain at d4. eptr
-(54% under load, held-out always at head, train-only partners) = 0.53 sits FAR below this
-curve (dose50 0.83), so eptr's deficit is NOT the load fraction: position and/or partner
-composition does matter after all (§③ stays open, but its confound list shrinks).
+Verdict: concave — 21% of the practice already buys half of the E-co gain at d4 (0.53 →
+0.75), 45% two thirds (0.83), then 0.91 / 0.97; seed sd shrinks with dose (0.15 → 0.02).
+eptr (54% under load, held-out always at head, train-only partners) = 0.53 sits FAR below
+this curve (dose25 at 21% is already 0.75), so eptr's deficit is NOT the load fraction:
+position and/or partner composition does matter after all (§③ stays open, but its
+confound list shrinks).
 
 **Overall.** The composition procedure transfers; the per-op binding must still be
 installed under load for (nearly) every op — a general "robust retrieval" skill emerges
@@ -443,8 +445,7 @@ naming. Init caveat (#9) applies to every number above.
       train-op head; 2×2 partner × position at matched load.
 - [x] ① name ablation, matched: done 2026-09-03 (refuted, all 3 seeds × 3 schemes
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
-- [x] H0/H1 cells: 24/27 done and written up ("H0/H1 RESULTS"); dose25 ×3 pending
-      (3284632/34/35). When in: fill the dose table, update the summary sentence.
+- [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
