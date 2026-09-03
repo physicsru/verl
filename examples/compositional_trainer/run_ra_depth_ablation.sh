@@ -153,9 +153,11 @@ done
 # held-out sweep. Automatic when the (last) data dir carries treated_ops.json; ABL_CLASSIFY=1
 # forces the classifier for any cell.
 if [ -n "${CI_ARGS[heldout]:-}" ] && { [ "${ABL_CLASSIFY:-0}" = "1" ] || [ -f "${DATA_DIR}/treated_ops.json" ]; }; then
-    GROUPS=""; [ -f "${DATA_DIR}/treated_ops.json" ] && GROUPS="--op-groups ${DATA_DIR}/treated_ops.json"
+    # NB: not `GROUPS` — that is bash's read-only builtin (the caller's group ids); the first
+    # sub0 jobs passed a stray "22929" instead of --op-groups and produced no groups report.
+    OPGROUPS=""; [ -f "${DATA_DIR}/treated_ops.json" ] && OPGROUPS="--op-groups ${DATA_DIR}/treated_ops.json"
     # shellcheck disable=SC2086
-    python3 ${CT}/compositionality_index.py --sweep ${CI_ARGS[heldout]} ${GROUPS} \
+    python3 ${CT}/compositionality_index.py --sweep ${CI_ARGS[heldout]} ${OPGROUPS} \
         --out "${PBS_O_WORKDIR}/analysis/ci_ra_abl_${CI_TAG}_groups.md" || true
     # shellcheck disable=SC2086
     python3 ${CT}/classify_ra_failures.py --sweep ${CI_ARGS[heldout]} --min_depth 5 --workers 12 \

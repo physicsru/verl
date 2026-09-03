@@ -348,7 +348,20 @@ sub3 3284623-25, sub6 3284626-28, sub9 3284629-31, dose25 3284632/3284634/328463
 on gj26 dose50 3284496-98, dose75 3284499-501, nops4 3284502-04, nops8 3284505-07.
 RA_INIT = the RFT-cx-initialised stage-1.5 (driver default). nops train-op subsets (seed 1,
 nested): nops4 = reverse_words, while_rotate, sort_chars, mirror_str; nops8 = +
-recursive_interlace, fancy_brackets, insert_separator, add_prefix. Scripts: `build_h01_cells.sh` (CPU data),
+recursive_interlace, fancy_brackets, insert_separator, add_prefix.
+
+**First cell in (2026-09-03 15:20) — sub0 = co-occurrence for train ops only, held-out
+single-task (3 seeds, `ci_ra_abl_sub0{,_s7,_s123}_b3072.md`, `cls_ra_abl_sub0*.md`):**
+held-out d4 0.50±0.06 (0.58/0.43/0.50), d8 0.12±0.04 (0.11/0.07/0.17) — the v1 band
+(0.53±0.15 / 0.09±0.05), while train-op d8 stays 0.86–0.93. Per-op episode ok (depth 2-8)
+is a graded spread, not a bistable flip: e.g. seed 1 func_0 0.44, func_21 0.68, func_6 0.69,
+func_10 0.71, func_14 0.75, func_12 0.77; the weak ops differ by seed. Reading: multi-def
+answers on the train ops alone do NOT transfer to held-out ops — the E-co gain is the
+held-out ops' own practice under load, not the answer format (the A0 control). This is
+the K=0 point of the subset-transfer curve; H1 now needs the untreated ops in sub3/6/9 to
+rise above this band. (Groups report missing for sub0-9 jobs submitted before the
+`GROUPS`→`OPGROUPS` driver fix — regenerate on the login node from the sweep dirs with
+`compositionality_index.py --sweep … --op-groups <data_dir>/treated_ops.json`.) Scripts: `build_h01_cells.sh` (CPU data),
 `build_pool_data.sh <pool> <scheme>` (matched name pools), `submit_h01_campaign.sh`
 (DRY_RUN=1 prints the 27 + 19 qsub lines); readouts are produced by
 `run_ra_depth_ablation.sh` automatically for cells that carry `treated_ops.json`.
