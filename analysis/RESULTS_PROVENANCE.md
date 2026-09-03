@@ -337,10 +337,11 @@ overlap in the predicted direction.
 
 **Status 2026-09-03.** names: DONE — H1-names branch refuted (§①; one seed rerun
 3284529 pending). cells: data built 2026-09-02 17:11 (`build_h01_cells.sh`), 27 jobs
-submitted 2026-09-03 to gj26 = sub0 3284481-83, sub3 3284484-86, sub6 3284487-89,
-sub9 3284490-92, dose25 3284493-95, dose50 3284496-98, dose75 3284499-501,
-nops4 3284502-04, nops8 3284505-07 (seeds 1/7/123 in that order); RA_INIT = the
-RFT-cx-initialised stage-1.5 (driver default). nops train-op subsets (seed 1,
+submitted 2026-09-03 (seeds 1/7/123 in that order; all `-p 1023`): on go39 (moved
+from gj26 while still queued, original ids 3284481-95 deleted) sub0 3284620-22,
+sub3 3284623-25, sub6 3284626-28, sub9 3284629-31, dose25 3284632/3284634/3284635;
+on gj26 dose50 3284496-98, dose75 3284499-501, nops4 3284502-04, nops8 3284505-07.
+RA_INIT = the RFT-cx-initialised stage-1.5 (driver default). nops train-op subsets (seed 1,
 nested): nops4 = reverse_words, while_rotate, sort_chars, mirror_str; nops8 = +
 recursive_interlace, fancy_brackets, insert_separator, add_prefix. Scripts: `build_h01_cells.sh` (CPU data),
 `build_pool_data.sh <pool> <scheme>` (matched name pools), `submit_h01_campaign.sh`
