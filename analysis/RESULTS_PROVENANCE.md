@@ -84,8 +84,27 @@ dirs `ablation_sweep_<cell>[_s<seed>]_b3072`, CI `ci_ra_abl_<cell>[_s<seed>]_b30
    present in `--comp_src` at `comp_per_depth`=4,000; the alt build's comp
    source contained depth-1 rows, so 4,000 single-op train-op rows were added
    as "comps" (extra_info depth=1, op=single func; the 4,000 extra = exactly
-   one comp_per_depth). Rebuild with a depth-2..4 comp source (or a
-   `--comp_min_depth 2` filter) before replicating.
+   one comp_per_depth). REBUILT 2026-09-02 (`build_pool_data.sh`, 32,000 rows,
+   0 shallow rows); matched results in §①.
+8. **(2026-09-03) Checkpoint-name collision → silent resume.** `ra-alt-v1-s1`
+   (job 3282001) targeted `ra_sft_bootstrap_paper_alt_v1_qwen3_4b`, which the
+   old unmatched job 3279398 had already written; verl `resume_mode=auto`
+   loaded its global_step_400 and trained **0 steps** (log: "Found latest
+   checkpoint … (step 400)", safetensors dated 09-02 05:05). Its sweep therefore
+   reproduces the old 0.977/0.902 exactly and is NOT a matched replicate.
+   Rerun as `ABL_TAG=m` (job 3284529). `run_ra_depth_ablation.sh` now aborts
+   when SAVE_DIR already holds a checkpoint (ABL_FORCE=1 to override).
+9. **(2026-09-03) Two different stage-1.5 inits are in play.** The original
+   `stage15b_paper_closedbook_cx_qwen3_4b` (job 2465179, 2026-07-30) was
+   initialised from `stage1_paper_rftcx_iter1/global_step_1984` (the RFT-cx
+   stage-1 model), whereas every `*_frombase*` stage-1.5 (num 3278516, alt
+   3282000, alt2 3282007, the old alt 3279056) starts from Qwen3-4B-Base. Same
+   data, 4 nodes, seed 1 in both cases. On the from-base init E-co gives
+   held-out d4 **0.77±0.07** (numfb) instead of 0.97±0.02, and v1 varies
+   0.18–0.71 across RA seeds. Every 3-seed claim in this ledger shares ONE
+   stage-1.5 init (the RFT-cx one for the paper pool); the RA-seed sd
+   understates the pipeline's variance. The 27 H0/H1 cell jobs use the RFT-cx
+   init (driver default), consistent with E-co / C1–C5.
 
 ---
 
@@ -104,7 +123,9 @@ constant LR 2e-5 (v1 400 steps over 25,723 rows; E-co 308 over 19,719 — fewer
 rows because 1–4 atomic tasks share one row). A 4th v1-recipe sample exists
 (numfb, job 3279397, seed 1 from a RE-TRAINED stage-1.5): 0.953/0.711/0.473/0.277,
 the best v1 d8 ever — excluded from the mean because its init differs; it shows
-the stage-1.5 seed is a variance source of its own.
+the stage-1.5 seed is a variance source of its own. **Init caveat (issue #9):**
+both rows sit on the RFT-cx-initialised stage-1.5; on a from-base stage-1.5
+(numfb line, §①) the same recipes give v1 0.52±0.24 / eco 0.77±0.07 at d4.
 
 Data: E-co train parquet `data/compositional/paper/ra_rft/sft_bootstrap_eco/`,
 built by `build_ra_sft_data.py --multi_atomic` (each atomic answer holds U{0..3}
@@ -198,38 +219,49 @@ groups); ideally the 2×2 partner × position at matched load. Data dirs
 
 ---
 
-## ① NAME ABLATION (digit-token neighbour confusion)
+## ① NAME ABLATION — MATCHED REPLICATION (2026-09-03): letter names do NOT lift v1; H1-names branch refuted
 
-Intended as a controlled pair, both from Qwen3-4B-Base, same pipeline, only
-the opaque op-name scheme differing (`COMPOSITIONAL_NAME_SCHEME` in
-`operators.py`: num=`func_10`, alt=`func_qzk`). PRELIMINARY (n=1 each) and,
-per the 2026-09-02 audit, NOT data-matched at stage 1.5 (issue #7).
+Design: three op-name schemes (`COMPOSITIONAL_NAME_SCHEME` in `operators.py`:
+num=`func_10`, alt=`func_qzk`, alt2=`func_ubiz`, tokenisation identical: 3–4
+tokens per name in every scheme), each with its own pool regenerated row-for-row
+from the paper recipe (`build_pool_data.sh`: stage15 20,000, stage15b 32,000 with
+`--comp_min_depth 2`, tests 2,048, RA v1 25,723 / eco 19,719), stage-1.5 trained
+**from Qwen3-4B-Base** (4 nodes, 2 epochs, 500 steps), then RA v1 and RA E-co ×
+seeds 1/7/123, greedy @3072. The num side uses the same from-base recipe
+(`stage15b_num_frombase`, job 3278516; RA runs tagged `numfb`), so the three
+schemes share the init procedure (see issue #9 for why this differs from the
+main table).
 
-| naming | held-out d2 / d4 / d6 / d8 | stage15b job | RA-v1 job | ckpt | CI report |
-|---|---|---|---|---|---|
-| num (`func_10`) | 0.95 / 0.71 / 0.47 / 0.28 | 3278516 (memsw at teardown; ckpt OK step 500) | 3279397 | `ra_sft_bootstrap_paper_v1_qwen3_4b` | `analysis/ci_v1_numfb_b3072.md` |
-| **alt (`func_qzk`)** | 0.99 / **0.98** / 0.93 / **0.90** | 3279056 | 3279398 | `ra_sft_bootstrap_paper_alt_v1_qwen3_4b` (in `paper_alt/`) | `analysis/ci_v1_altfb_b3072.md` |
+| scheme | stage-1.5 (from base) | RA v1 held-out d4 / d8, mean±sd (seeds 1/7/123) | RA E-co d4 / d8 | jobs |
+|---|---|---|---|---|
+| num | `stage15b_num_frombase_qwen3_4b` (3278516) | 0.52±0.24 (0.71/0.18/0.66) / 0.21±0.14 (0.28/0.01/0.33) | 0.77±0.07 (0.88/0.71/0.73) / 0.52±0.26 (0.87/0.46/0.25) | v1: 3279397, 3282014, 3282015; eco: 3282016-18 |
+| alt | `stage15b_paper_alt_frombase_matched_qwen3_4b` (3282000) | seeds 7/123 only: 0.41±0.02 (0.43/0.40) / 0.08±0.01 (0.09/0.07); seed 1 rerun pending (3284529, issue #8) | 0.71±0.07 (0.61/0.79/0.72) / 0.32±0.11 (0.18/0.45/0.35) | v1: 3282002, 3282003 (+3284529); eco: 3282004-06 |
+| alt2 | `stage15b_paper_alt2_frombase_matched_qwen3_4b` (3282007) | 0.37±0.11 (0.51/0.35/0.24) / 0.05±0.04 (0.11/0.03/0.01) | 0.76±0.17 (0.62/0.99/0.67) / 0.42±0.33 (0.16/0.88/0.23) | v1: 3282008-10; eco: 3282011-13 |
 
-Data lines: num = `data/compositional/paper/…` (existing); alt =
-`data/compositional/paper_alt/…` (regenerated with alt names). To evaluate/
-regenerate the alt CI you MUST set `COMPOSITIONAL_NAME_SCHEME=alt` in the env.
-Stage-1.5 data (audited): num `paper/stage15b_closedbook_codeexec/train.parquet`
-= 32,000 rows (800 depth-1 rows per op × 25 + 12,000 d2-4 train-op comps; 500
-steps); alt `paper_alt/stage15b_closedbook_codeexec/train.parquet` = **36,000**
-rows (train ops 1,048–1,412 depth-1 rows each, held-out ops 800, comps 12,000;
-562 steps; RA init `stage15b_alt_frombase_qwen3_4b/global_step_562`). RA data IS
-matched (25,723 rows, seed 1, 400 steps). The two test sets share skeletons
-(identical k per depth).
+CI reports: `ci_ra_abl_paper_alt{,2}_{v1,eco}[_s{7,123}]_b3072.md`,
+`ci_ra_abl_{v1,eco}_numfb[_s{7,123}]_b3072.md` (+ `_trainops`); ckpts
+`ra_sft_bootstrap_paper_alt{,2}_{v1,eco}[_s*]_qwen3_4b`,
+`ra_sft_bootstrap_paper_{v1,eco}_numfb[_s*]_qwen3_4b`; sweeps under
+`data/compositional/paper_alt{,2}/ra_rft/`. Train-op d8 is 0.70–0.99 in every
+cell (models are fine on composed ops; the loss is held-out-specific as before).
+Failure classification: `analysis/cls_name_ablation_{alt,alt2,num}.md`.
 
-**Finding (n=1, confounded — do not quote as a result yet):** with letter
-names held-out d8 is 0.90 vs 0.28 — consistent with "collapse is largely
-digit-token neighbour confusion (func_10↔func_11)", but (a) stage-1.5 data is
-unmatched (issue #7), (b) the num run's 0.28 is itself the highest v1 d8 ever
-seen (the three original v1 seeds: 0.16/0.04/0.06), so the stage-1.5 seed is a
-variance source of its own, and (c) there is no chimera classification on the
-alt sweep yet. Before publishing: rebuild paper_alt stage15b at 800/op and
-retrain; ≥3 RA seeds per scheme (num seeds 7/123 from
-`stage15b_num_frombase`); `classify_ra_failures.py` on both sweeps.
+**Reading.** The 2026-09-02 n=1 claim ("letter names raise held-out d8 0.28 →
+0.90") does not replicate: two fresh matched alt seeds give d4 0.43/0.40 and
+three alt2 seeds 0.51/0.35/0.24 — the v1 band. The one 0.98/0.90 model is the
+old unmatched-stage-1.5 run (issue #7), re-measured identically by the
+collided job (issue #8); whether its stage-1.5 data or its seed made it is what
+job 3284529 settles. Meanwhile E-co lifts every scheme by a similar margin from
+the same from-base init (num +0.25, alt +0.30, alt2 +0.39 at d4), so the
+co-occurrence effect is name-agnostic and the digit-neighbour-confusion
+mechanism is **not** the lever. New fact instead: the stage-1.5 init is a
+first-order factor (issue #9) — E-co 0.97±0.02 on the RFT-cx-initialised
+stage-1.5 vs 0.71–0.77 on from-base stage-1.5, with much larger seed variance
+(eco alt2 seeds 0.62/0.99/0.67).
+
+Old unmatched line, kept for the record: num 0.95/0.71/0.47/0.28 (3279397 =
+numfb seed 1 above), alt 0.99/0.98/0.93/0.90 (3279398, stage-1.5 3279056 on
+36k rows / 562 steps); reports `ci_v1_{numfb,altfb}_b3072.md`.
 
 ---
 
@@ -285,7 +317,16 @@ O(#compositions)). Open: is that robustness a per-memory property or a transfera
 | dose | dose25/50/75 (+v1 = 0, eco = 100): fraction of atomic tasks that enter grouping (`--multi_frac`) | held-out d4 vs measured under-load fraction (audit script) | — | gives the per-op practice needed; eptr's 54% → 0.53 should land on the curve |
 
 Decision rule (fixed now): a claim goes in the paper only when the 3-seed bands do not
-overlap in the predicted direction. Scripts: `build_h01_cells.sh` (CPU data),
+overlap in the predicted direction.
+
+**Status 2026-09-03.** names: DONE — H1-names branch refuted (§①; one seed rerun
+3284529 pending). cells: data built 2026-09-02 17:11 (`build_h01_cells.sh`), 27 jobs
+submitted 2026-09-03 to gj26 = sub0 3284481-83, sub3 3284484-86, sub6 3284487-89,
+sub9 3284490-92, dose25 3284493-95, dose50 3284496-98, dose75 3284499-501,
+nops4 3284502-04, nops8 3284505-07 (seeds 1/7/123 in that order); RA_INIT = the
+RFT-cx-initialised stage-1.5 (driver default). nops train-op subsets (seed 1,
+nested): nops4 = reverse_words, while_rotate, sort_chars, mirror_str; nops8 = +
+recursive_interlace, fancy_brackets, insert_separator, add_prefix. Scripts: `build_h01_cells.sh` (CPU data),
 `build_pool_data.sh <pool> <scheme>` (matched name pools), `submit_h01_campaign.sh`
 (DRY_RUN=1 prints the 27 + 19 qsub lines); readouts are produced by
 `run_ra_depth_ablation.sh` automatically for cells that carry `treated_ops.json`.
@@ -297,11 +338,13 @@ overlap in the predicted direction. Scripts: `build_h01_cells.sh` (CPU data),
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
       defs under load (larger train partner pool); epho variant without the
       train-op head; 2×2 partner × position at matched load.
-- [ ] ① name ablation: `build_pool_data.sh paper_alt alt` / `paper_alt2 alt2`, then
-      `submit_h01_campaign.sh` PARTS=names (stage-1.5 from base → RA v1/eco × 3 seeds
-      per pool, num side re-done as numfb); chimera classification runs in-job.
-- [ ] H0/H1 cells: `build_h01_cells.sh` then `submit_h01_campaign.sh` PARTS=cells
-      (sub0/3/6/9, dose25/50/75, nops4/8 × 3 seeds = 27 jobs).
+- [x] ① name ablation, matched: done 2026-09-03 (refuted); pending: alt v1 seed-1
+      rerun 3284529; read `cls_name_ablation_*.md`.
+- [ ] H0/H1 cells: 27 jobs queued (ids above); when done, read
+      `ci_ra_abl_sub*_groups.md` + `cls_ra_abl_sub*.md` (untreated ops), dose and
+      nops CI tables; 3-seed bands per the decision rule.
+- [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
+      seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
       held-out val + stronger KL; re-eval the last pre-collapse ckpt.
 - [ ] 8B line: fix HF export (sharded save or offline convert), then v1-8b / eco-8b.

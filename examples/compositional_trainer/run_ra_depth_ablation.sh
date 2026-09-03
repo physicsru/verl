@@ -111,6 +111,12 @@ for VAR in ${VARIANTS}; do
         export TRAIN_FILE="${DATA_DIR}/train.parquet"
         export VAL_FILES="${DATA_DIR}/test.parquet"
         export MODEL_PATH="${INIT}"
+        # verl's resume_mode=auto silently RESUMES a checkpoint found in SAVE_DIR: job 3282001
+        # (ra-alt-v1-s1) trained 0 steps on the old unmatched model this way (ledger issue #8).
+        if [ -f "${SAVE_DIR}/latest_checkpointed_iteration.txt" ] && [ "${ABL_FORCE:-0}" != "1" ]; then
+            echo "[ra-abl][ERROR] ${SAVE_DIR} already holds a checkpoint; a fresh run needs ABL_TAG=<tag>" \
+                 "(or ABL_FORCE=1 to knowingly reuse it)."; exit 1
+        fi
         launch_mpi ${CT}/_sft_launch.sh
         CKPT="$(resolve_hf_ckpt "${SAVE_DIR}")"
     fi
