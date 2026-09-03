@@ -235,10 +235,12 @@ main table).
 | scheme | stage-1.5 (from base) | RA v1 held-out d4 / d8, mean±sd (seeds 1/7/123) | RA E-co d4 / d8 | jobs |
 |---|---|---|---|---|
 | num | `stage15b_num_frombase_qwen3_4b` (3278516) | 0.52±0.24 (0.71/0.18/0.66) / 0.21±0.14 (0.28/0.01/0.33) | 0.77±0.07 (0.88/0.71/0.73) / 0.52±0.26 (0.87/0.46/0.25) | v1: 3279397, 3282014, 3282015; eco: 3282016-18 |
-| alt | `stage15b_paper_alt_frombase_matched_qwen3_4b` (3282000) | seeds 7/123 only: 0.41±0.02 (0.43/0.40) / 0.08±0.01 (0.09/0.07); seed 1 rerun pending (3284529, issue #8) | 0.71±0.07 (0.61/0.79/0.72) / 0.32±0.11 (0.18/0.45/0.35) | v1: 3282002, 3282003 (+3284529); eco: 3282004-06 |
+| alt | `stage15b_paper_alt_frombase_matched_qwen3_4b` (3282000) | 0.46±0.06 (0.54/0.43/0.40) / 0.11±0.04 (0.16/0.09/0.07) — seed 1 = rerun 3284529 (`ABL_TAG=m`, issue #8) | 0.71±0.07 (0.61/0.79/0.72) / 0.32±0.11 (0.18/0.45/0.35) | v1: 3284529, 3282002, 3282003; eco: 3282004-06 |
 | alt2 | `stage15b_paper_alt2_frombase_matched_qwen3_4b` (3282007) | 0.37±0.11 (0.51/0.35/0.24) / 0.05±0.04 (0.11/0.03/0.01) | 0.76±0.17 (0.62/0.99/0.67) / 0.42±0.33 (0.16/0.88/0.23) | v1: 3282008-10; eco: 3282011-13 |
 
-CI reports: `ci_ra_abl_paper_alt{,2}_{v1,eco}[_s{7,123}]_b3072.md`,
+CI reports: `ci_ra_abl_paper_alt{,2}_{v1,eco}[_s{7,123}]_b3072.md` (alt v1 seed 1 =
+`ci_ra_abl_paper_alt_v1_m_b3072.md`; the un-suffixed alt v1 file is the collided
+job = old model),
 `ci_ra_abl_{v1,eco}_numfb[_s{7,123}]_b3072.md` (+ `_trainops`); ckpts
 `ra_sft_bootstrap_paper_alt{,2}_{v1,eco}[_s*]_qwen3_4b`,
 `ra_sft_bootstrap_paper_{v1,eco}_numfb[_s*]_qwen3_4b`; sweeps under
@@ -247,11 +249,14 @@ cell (models are fine on composed ops; the loss is held-out-specific as before).
 Failure classification: `analysis/cls_name_ablation_{alt,alt2,num}.md`.
 
 **Reading.** The 2026-09-02 n=1 claim ("letter names raise held-out d8 0.28 →
-0.90") does not replicate: two fresh matched alt seeds give d4 0.43/0.40 and
+0.90") does not replicate: three matched alt seeds give d4 0.54/0.43/0.40 and
 three alt2 seeds 0.51/0.35/0.24 — the v1 band. The one 0.98/0.90 model is the
 old unmatched-stage-1.5 run (issue #7), re-measured identically by the
-collided job (issue #8); whether its stage-1.5 data or its seed made it is what
-job 3284529 settles. Meanwhile E-co lifts every scheme by a similar margin from
+collided job (issue #8). Job 3284529 repeats it with the SAME RA seed (1) on the
+matched stage-1.5 and gets 0.54/0.16, so the 0.98 came from that particular
+stage-1.5 model — its extra 4k train-op rows / 62 steps or plain stage-1.5
+run variance, not separable with one run; under issue #9 (per-op bistable
+binding, init-dependent) run variance is the parsimonious reading. Meanwhile E-co lifts every scheme by a similar margin from
 the same from-base init (num +0.25, alt +0.30, alt2 +0.39 at d4), so the
 co-occurrence effect is name-agnostic and the digit-neighbour-confusion
 mechanism is **not** the lever. New fact instead: the stage-1.5 init is a
@@ -355,8 +360,8 @@ recursive_interlace, fancy_brackets, insert_separator, add_prefix. Scripts: `bui
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
       defs under load (larger train partner pool); epho variant without the
       train-op head; 2×2 partner × position at matched load.
-- [x] ① name ablation, matched: done 2026-09-03 (refuted); pending: alt v1 seed-1
-      rerun 3284529; read `cls_name_ablation_*.md`.
+- [x] ① name ablation, matched: done 2026-09-03 (refuted, all 3 seeds × 3 schemes
+      × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [ ] H0/H1 cells: 27 jobs queued (ids above); when done, read
       `ci_ra_abl_sub*_groups.md` + `cls_ra_abl_sub*.md` (untreated ops), dose and
       nops CI tables; 3-seed bands per the decision rule.
