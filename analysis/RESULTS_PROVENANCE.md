@@ -263,6 +263,22 @@ Old unmatched line, kept for the record: num 0.95/0.71/0.47/0.28 (3279397 =
 numfb seed 1 above), alt 0.99/0.98/0.93/0.90 (3279398, stage-1.5 3279056 on
 36k rows / 562 steps); reports `ci_v1_{numfb,altfb}_b3072.md`.
 
+**Failure classification** (`cls_name_ablation_{alt,alt2,num}.md`, per-op episode
+table, depth 2-8): in every weak from-base model the loss sits in ONE or TWO
+held-out ops that are almost totally collapsed while the other 10-11 are ≥ 0.9
+ok — func_24 backchain_palindrome `(s, depth)`: alt `func_umket` 0.08 ok / 0.92
+TypeError (eco s1), 0.28 (eco s7), 0.08 (v1 s7); alt2 `func_uzuw` 0.12 (v1 s1),
+0.31 (eco s1); num 0.13 (v1 s7), 0.66 (eco s123); func_8 rotate_str `(s, n)`:
+num v1 s7 0.14, alt2 `func_eqah` 0.74; func_6 add_suffix `(s, suf)`: num v1 s7
+0.53, eco s1 0.86; func_7 interlace_str: alt `func_kacy` 0.27 (wrong body);
+func_10 alternate_case: alt2 `func_hevul` 0.31 (wrong body). The dominant verdict
+is TypeError = the op written with one parameter — an arity prior, not a
+digit-neighbour chimera — consistent with names not mattering. Per-op binding is
+near-bistable (≈ 1.0 or ≈ 0.1) and which ops flip is seed-dependent, so a
+model's held-out number is governed by 1-2 ops; that is the seed variance. The
+0.99 alt2-eco seed simply has no flipped op. The subset-transfer readout (per-op
+table) is therefore the right unit of analysis for the cells.
+
 ---
 
 ## ② RL-E-co — see KNOWN ISSUE #2 (collapsed; steps ≤40 only)
