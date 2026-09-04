@@ -108,6 +108,44 @@ dirs `ablation_sweep_<cell>[_s<seed>]_b3072`, CI `ci_ra_abl_<cell>[_s<seed>]_b30
 
 ---
 
+## EXPERIMENT SETTINGS (glossary; every cell below differs from v1 / E-co in ONE thing)
+
+Common to every RA cell unless stated: init = `stage15b_paper_closedbook_cx_qwen3_4b/global_step_500`
+(stage-1.5: 20k closed-book depth-1 atomics over all 25 ops + 12k depth-2..4 train-op comps,
+itself initialised from the RFT-cx stage-1 model — issue #9); one stitched RA SFT (2 epochs,
+batch 128, LR 2e-5 constant, `trainer.seed` 1/7/123); eval = greedy @3072 on the held-out test
+(12 held-out ops, depths 1-8, 256/depth) and the train-op test (13 train ops). "Comps" = train-op
+compositions in RA format (one `Recall func_N:` episode per distinct op + `Assemble:` block);
+"atomics" = depth-1 single-op tasks in the same format. Held-out ops never appear in any comp.
+
+| cell | atomic side (10k tasks, all 25 ops) | composition side | the one variable | held-out d4 / d8 |
+|---|---|---|---|---|
+| baseline (stage15b) | — (no RA SFT; prose + one code block) | — | no RA format | 0.03 / 0.00 |
+| d1 | single-task | none | RA format seen at k=1 only | 0.00 / 0.00 |
+| d12 | single-task | 16k, depth 2 only | comp depth range | 0.73 / 0.12 |
+| d13 / d13b | single-task | 16k, depth 2-3 (seed 42 / 123) | comp depth range | 0.46 / 0.04 ; 0.67 / 0.09 |
+| **v1** (= d14) | single-task, 10,000 rows | 15,979 mixed-structure comps d2-4 | reference recipe | 0.53±0.15 / 0.09±0.05 |
+| **E-co** | 1-4 independent tasks per answer (base + U{0..3} partners), all ops, ~3.7k rows; 90% of held-out defs under load | same 15,979 comps | atomic context shape | 0.97±0.02 / 0.73±0.15 |
+| C1 | E-co grouping | none | comps removed | 0.66±0.14 / 0.08±0.04 |
+| C2 | E-co grouping | 2,068 pure chains f(g(x)), depth 2 | structure: chains only | 0.60±0.04 / 0.08±0.01 |
+| C3 | E-co grouping | 2,059 mixed-structure comps, depth 2 | structure: mixed (vs C2) | 0.77±0.11 / 0.17±0.05 |
+| C4 | E-co grouping | 12,452 mixed comps, depth 2 | volume ×6 (vs C3) | 0.70±0.03 / 0.12±0.05 |
+| C4b | E-co grouping | 12,436 mixed comps, depth 2-4 | depth range (vs C4, matched count) | 0.90±0.04 / 0.62±0.13 |
+| C5 | single-task; held-out ops' atomic rows duplicated to ~3,760/op (v1: 397) | same 15,979 comps | frequency ×9.5, no co-occurrence | 0.63±0.12 / 0.14±0.11 |
+| eptr | held-out tasks as group bases, partners = train ops only → measured: held-out always first, 54% under load | same comps | partner identity (confounded, §③) | 0.53±0.07 / 0.11±0.02 |
+| epho | bases = train tasks, partners = held-out only → a train op heads every group, held-out never first, 100% under load | same comps | partner identity (confounded) | 0.83±0.03 / 0.46±0.17 |
+| pfirst / plast | E-co groups reordered: held-out at head (61%) / tail (61%) | same comps | position, clean pair (n=2) | 0.88±0.11 / 0.59 ; 0.98±0.01 / 0.73 |
+| sub0 / sub3 / sub6 / sub9 | E-co grouping for train ops + K held-out ops (nested: K=3 func_2/6/18; +func_7/8/21; +func_10/12/16); other held-out ops single-task | same comps | how many held-out ops get load practice | 0.50 / 0.51 / 0.75 / 0.82 (d4) |
+| dose25 / 50 / 75 | E-co grouping for a random 25/50/75% of atomic tasks → 21/45/66% of held-out defs under load | same comps | fraction of practice under load | 0.75 / 0.83 / 0.91 (d4) |
+| nops4 / nops8 | E-co grouping | 16k mixed d2-4 comps regenerated from only 4 / 8 train ops (nested: reverse_words, while_rotate, sort_chars, mirror_str; + recursive_interlace, fancy_brackets, insert_separator, add_prefix) | diversity of composed ops | 0.55±0.03 / 0.79±0.09 (d4) |
+| num / alt / alt2 (§①) | v1 or E-co atomics | same comps | op-name scheme; stage-1.5 from base (not RFT-cx) | v1 0.52 / 0.46 / 0.37; eco 0.77 / 0.71 / 0.76 (d4) |
+| P0b / P1b (§14 HISTORY) | width-2 pairs only / pairs + depth-2 chains | — | minimal primitives | see `structured_map_round*.md` |
+| decomposed inference | v1 model; each helper recalled in its own forward pass, assembled mechanically | — | system-level isolation | 1.00 / 1.00 |
+| RL (A) / (B) | GRPO from v1 on train-op comps d7-10 with 3 probe ops held out of RL / from d12 on d1-4 | — | RL on compositions | held-out flat→declines; rlops+probe rise |
+| RL-E-co | GRPO from v1 on width-1..4 multi-task pool, all 25 ops | — | RL as the co-occurrence teacher | d4 0.96 at step 20-40, collapsed at 45 |
+
+---
+
 ## MAIN RESULT — E-co vs v1 (the headline, 3 seeds each)
 
 | cell | held-out d2 / d4 / d6 / d8 (mean±sd) | seeds | jobs | ckpts | CI reports |
