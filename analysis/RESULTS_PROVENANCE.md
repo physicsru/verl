@@ -476,6 +476,22 @@ naming. Init caveat (#9) applies to every number above.
 
 ---
 
+## C — DEPTH EXECUTION RELIABILITY (submitted 2026-09-04; running)
+
+Component C of the conclusion: with E-co the held-out and train-op curves decay together
+(d8 0.73 vs 0.86); failures at d8 are 3/4 mechanical (episode omission, paren copy) and
+per-step reliability drops 0.995 → 0.977 from d4 to d8; decomposed inference is 1.000, so
+the pieces are fine and serial execution is the limit. Two levers, both on the E-co init:
+
+| cell | design | jobs | pre-registered reading |
+|---|---|---|---|
+| eco_d28 (SFT) | E-co atomics + 16k train-op comps spanning depth **2-8** (fresh generation, seed 20260904, `stage2_level2to8_trainops_src`), SFT_MAX_LENGTH 4096, seeds 1/7/123 | submitted by the waiter once `build_ra_sft_data.py` finishes (ids in this section when in) | if held-out d8 rises toward train-op d8 → depth reliability is demonstration-limited and op-agnostic (mechanical errors shrink); if only train-op rises → the deep demos teach the composed ops, not the procedure; if neither → serial-length limit |
+| rl-eco-d7to10 (RL) | GRPO from `ra_sft_bootstrap_paper_eco_qwen3_4b/global_step_308` on train-op comps d7-10 (probe split as line A), KL 0.01, 100 steps, SAVE_FREQ 10, TEST_FREQ 10, EARLY_STOP_RESP_LEN 3500 | 3290812 (go39) | line A from v1 lifted rlops/probe and squeezed held-out; from the E-co init H-C predicts held-out d8 rises with rlops (mechanical errors are shared) — if held-out declines again, RL on compositions squeezes even robust bindings |
+
+Fixed budget: no manual stopping; the length early-stop is the only automatic rule.
+
+---
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
@@ -484,6 +500,7 @@ naming. Init caveat (#9) applies to every number above.
 - [x] ① name ablation, matched: done 2026-09-03 (refuted, all 3 seeds × 3 schemes
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
+- [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
