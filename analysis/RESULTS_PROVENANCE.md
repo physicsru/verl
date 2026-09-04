@@ -499,13 +499,23 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
   defs per answer). Reading: depth reliability is NOT demonstration-limited in an
   op-agnostic way; deeper demos teach the composed ops and cost the others. Established
   (3-seed): the SFT lever for C is closed.
-- rl-eco-d7to10 (3290812) trajectory (greedy val every 10 steps; step 0 = E-co seed 1):
-  held-out d4/d8 0.98/0.84 → **0.99/0.94 (step 10)** → 0.94/0.79 (20) → 0.89/0.60 (30);
-  rlops d8/d12 0.91/0.62 → 1.00/0.91 (10) → 1.00/0.94; probe d8 0.87 → 0.99; reward 1.16
-  (10) → 1.20 (30, saturated); response length flat ~1300 (no blow-up). So RL on train-op
-  deep comps DOES lift held-out at first (shared mechanical errors), then, once reward
-  saturates and only KL drift remains, squeezes it exactly as line A did. The usable
-  regime is the pre-saturation window (≤ 10-15 steps).
+- rl-eco-d7to10 (3290812, COMPLETE, 100 steps; greedy val every 10 steps; step 0 = E-co
+  seed 1; `ci_rl_ra_grpo_d7to10_ecoinit_{heldout,rlops,probe}.md`):
+
+  | step | 0 | 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | held-out d4 | 0.98 | **0.99** | 0.94 | 0.89 | 0.86 | 0.79 | 0.78 | 0.77 | 0.77 | 0.77 | 0.77 |
+  | held-out d8 | 0.84 | **0.94** | 0.79 | 0.60 | 0.54 | 0.45 | 0.43 | 0.42 | 0.43 | 0.43 | 0.43 |
+  | rlops d8 / d12 | 0.91 / 0.62 | 1.00 / 0.91 | 1.00 / 0.94 | 1.00 / 0.95 | 0.99 / 0.96 | 1.00 / 0.96 | 1.00 / 0.96 | 1.00 / 0.96 | 1.00 / 0.96 | 1.00 / 0.96 | 1.00 / 0.96 |
+  | probe d8 | 0.87 | 0.99 | 0.99 | 0.99 | 0.99 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+  | train reward | — | 1.16 | 1.16 | 1.20 | 1.20 | 1.20 | 1.20 | 1.20 | 1.19 | 1.15 | 1.18 |
+
+  Response length flat 1,220-1,370 (no blow-up; early stop never fired). Reading: RL on
+  train-op deep comps lifts held-out at first (shared mechanical errors: d8 +0.10 in 10
+  steps, d12 rlops +0.29) and then, from the moment reward saturates (step ~30), squeezes
+  it monotonically to BELOW the E-co start (0.77/0.43 vs 0.98/0.84) while rlops/probe sit
+  at ceiling — line A's pattern, now on robust bindings too. The usable regime is the
+  pre-saturation window (≤ 10-15 steps); the 100-step budget was honoured, no manual stop.
 - Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
   step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
   `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
