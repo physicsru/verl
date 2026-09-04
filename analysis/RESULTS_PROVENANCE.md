@@ -485,7 +485,7 @@ the pieces are fine and serial execution is the limit. Two levers, both on the E
 
 | cell | design | jobs | pre-registered reading |
 |---|---|---|---|
-| eco_d28 (SFT) | E-co atomics + 16k train-op comps spanning depth **2-8** (fresh generation, seed 20260904, `stage2_level2to8_trainops_src`), SFT_MAX_LENGTH 4096, seeds 1/7/123 | submitted by the waiter once `build_ra_sft_data.py` finishes (ids in this section when in) | if held-out d8 rises toward train-op d8 → depth reliability is demonstration-limited and op-agnostic (mechanical errors shrink); if only train-op rises → the deep demos teach the composed ops, not the procedure; if neither → serial-length limit |
+| eco_d28 (SFT) | E-co atomics + 16k train-op comps spanning depth **2-8** (fresh generation, seed 20260904, `stage2_level2to8_trainops_src`; 19,728 rows, 4 deep comps failed the gate), SFT_MAX_LENGTH 4096, seeds 1/7/123 | 3291420 / 3291421 / 3291422 (go39) | if held-out d8 rises toward train-op d8 → depth reliability is demonstration-limited and op-agnostic (mechanical errors shrink); if only train-op rises → the deep demos teach the composed ops, not the procedure; if neither → serial-length limit |
 | rl-eco-d7to10 (RL) | GRPO from `ra_sft_bootstrap_paper_eco_qwen3_4b/global_step_308` on train-op comps d7-10 (probe split as line A), KL 0.01, 100 steps, SAVE_FREQ 10, TEST_FREQ 10, EARLY_STOP_RESP_LEN 3500 | 3290812 (go39) | line A from v1 lifted rlops/probe and squeezed held-out; from the E-co init H-C predicts held-out d8 rises with rlops (mechanical errors are shared) — if held-out declines again, RL on compositions squeezes even robust bindings |
 
 Fixed budget: no manual stopping; the length early-stop is the only automatic rule.
