@@ -31,6 +31,7 @@ GEN="${PY} ${HERE}/generate_data.py"
 mkdir -p "${SRC}"
 N_OPS=$("${PY}" -c "import sys; sys.path.insert(0,'${HERE}'); import operators as o; print(len(o.POOLS['${OPPOOL}']['all']))")
 N_ATOMIC=$((400 * N_OPS)); S15B_ROWS=$((800 * N_OPS + 12000))
+SRC_N=$((30000 * N_OPS / 25))   # stage-1.5 source pools scale with #ops (>= 816 candidates per op needed)
 NEW_EVAL=$("${PY}" -c "import sys; sys.path.insert(0,'${HERE}'); import operators as o; print(','.join(n for n in o.POOLS['${OPPOOL}']['eval'] if n not in o.PAPER_EVAL_SET))")
 
 skip() { [ "${FORCE:-0}" != "1" ] && [ -f "$1" ] && { echo "[skip] $1 exists"; return 0; }; return 1; }
@@ -40,11 +41,11 @@ echo "=== pool=${POOL} scheme=${SCHEME} ops=${OPPOOL} (${N_OPS} ops, n_atomic=${
 
 echo "=== 1/6 stage-1.5 source pools (build_v3_data.sh recipe) ==="
 skip "${SRC}/cb_src_trainops.parquet" || ${GEN} --pool ${OPPOOL} --stage 2 --split train --min_level 1 --max_level 1 \
-    --data_num 30000 --dedup program_input --seed 20260715 --save_path "${SRC}/cb_src_trainops.parquet"
+    --data_num ${SRC_N} --dedup program_input --seed 20260715 --save_path "${SRC}/cb_src_trainops.parquet"
 skip "${SRC}/cb_src_evalops.parquet" || ${GEN} --pool ${OPPOOL} --stage 2 --split test --min_level 1 --max_level 1 \
-    --data_num 30000 --dedup program_input --seed 20260716 --save_path "${SRC}/cb_src_evalops.parquet"
+    --data_num ${SRC_N} --dedup program_input --seed 20260716 --save_path "${SRC}/cb_src_evalops.parquet"
 skip "${SRC}/comp_src_trainops.parquet" || ${GEN} --pool ${OPPOOL} --stage 2 --split train --min_level 2 --max_level 4 \
-    --data_num 30000 --dedup program_input --seed 20260728 --save_path "${SRC}/comp_src_trainops.parquet"
+    --data_num ${SRC_N} --dedup program_input --seed 20260728 --save_path "${SRC}/comp_src_trainops.parquet"
 
 echo "=== 2/6 stage-1.5 atomic set (20k, the RA stitcher's --atomic_path) ==="
 skip "${OUT}/stage15_closedbook_codeexec/train.parquet" || ${PY} "${HERE}/build_closedbook_codeexec.py" \
