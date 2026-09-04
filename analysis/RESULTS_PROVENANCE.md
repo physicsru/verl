@@ -491,11 +491,14 @@ the pieces are fine and serial execution is the limit. Two levers, both on the E
 Fixed budget: no manual stopping; the length early-stop is the only automatic rule.
 
 **Preliminary (2026-09-04 16:20, one seed each):**
-- eco_d28 seed 1 (3291420): train-op d1-8 = **1.000 at every depth**, but held-out d4/d8 =
-  **0.57 / 0.29** (E-co: 0.98 / 0.83). Deep train-op demonstrations perfect the composed
-  ops and squeeze the held-out ones — the RFT / stage15b effect again, amplified (k≈8.6
-  train-op defs per answer). Reading: depth reliability is not demonstration-limited in an
-  op-agnostic way; the demos teach the composed ops. Seeds 7/123 pending.
+- eco_d28, **3 seeds** (3291420-22): held-out d4 **0.63±0.05** (0.57/0.62/0.69), d8
+  **0.33±0.02** (0.29/0.34/0.35) vs E-co 0.97±0.02 / 0.73±0.15 — non-overlapping, replicated
+  drop; train-op accuracy 1.000/1.000/0.891 at d4 and 1.000/1.000/0.684 at d8 (seed 123
+  weaker on train ops too). Deep train-op demonstrations perfect the composed ops and
+  squeeze the held-out ones — the RFT / stage15b effect again, amplified (k≈8.6 train-op
+  defs per answer). Reading: depth reliability is NOT demonstration-limited in an
+  op-agnostic way; deeper demos teach the composed ops and cost the others. Established
+  (3-seed): the SFT lever for C is closed.
 - rl-eco-d7to10 (3290812) trajectory (greedy val every 10 steps; step 0 = E-co seed 1):
   held-out d4/d8 0.98/0.84 → **0.99/0.94 (step 10)** → 0.94/0.79 (20) → 0.89/0.60 (30);
   rlops d8/d12 0.91/0.62 → 1.00/0.91 (10) → 1.00/0.94; probe d8 0.87 → 0.99; reward 1.16
