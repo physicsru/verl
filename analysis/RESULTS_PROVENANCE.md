@@ -492,7 +492,7 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
 
 ---
 
-## N-SCALING (paper50; pre-registered 2026-09-04; data building, jobs queued by a waiter)
+## N-SCALING (paper50; pre-registered 2026-09-04; data built 14:30, 10 jobs queued on go39)
 
 The 2^n question: does the per-op cost of load-robust binding, and the composition-demo
 requirement, stay O(n) as the number of primitives grows? Pool `paper50` = the 25 paper ops
@@ -509,6 +509,13 @@ n=25 from-base pair of §① (numfb: v1 0.52±0.24, E-co 0.77±0.07 on the same 
 | v1-50 | single-task | 16k d2-4 over 26 train ops | orig12 (= the paper pool's own held-out file, directly comparable), new12, heldout24, trainops26 |
 | eco-50 | E-co grouping | same | same |
 | eco-50-n13 | E-co grouping | the paper pool's 16k comps over its 13 train ops | same |
+
+Build (`build_pool_data.sh paper50 num paper50`, sources 60k rows each): stage15 40,000,
+stage15b 52,000 (comp source d2 19,925 / d3 19,999 / d4 20,000), stage2_level1to4 50,000,
+tests 2,048 × {heldout24, trainops26, new12}, RA v1 35,734 / eco 23,805 / eco_n13 23,794 rows
+(gate 100% ok). Jobs: stage-1.5 `stage15b_paper50_frombase_qwen3_4b` 3291573 (4 nodes,
+from base, 52k rows → ~810 steps); RA (depend=afterok, seeds 1/7/123): v1-50 3291574-76,
+eco-50 3291577-79, eco-50-n13 3291580-82; CI files `ci_ra_abl_paper50_<var>[_s*]_b3072{,_orig12,_new12,_trainops}.md`.
 
 Predictions. O(n) holds if eco-50 on orig12 ≈ 0.77 (n=25 from base) at the same 400
 rows/op; a clear drop means more competitors need more practice per op (cost grows with n).
@@ -527,8 +534,8 @@ without load practice. Decision rule as before (3-seed bands).
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
-- [ ] N-scaling: paper50 build → stage15b_paper50_frombase → v1-50 / eco-50 / eco-50-n13 × 3
-      (waiter submits; ids go into the N-SCALING section); readouts on orig12 / new12.
+- [ ] N-scaling: 10 jobs queued (3291573-82); read `ci_ra_abl_paper50_*_orig12.md` first
+      (comparable to numfb), then new12 / heldout24; fill the N-SCALING table.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
