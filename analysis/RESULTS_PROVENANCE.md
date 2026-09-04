@@ -540,9 +540,29 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
     marks the peak except entropy collapse; the robust answer is to remove the cause —
     keep every skill in the objective (mix multi-task atomic prompts over ALL ops into
     the RL pool, so sharpening train-op comps at the expense of other ops is itself
-    penalised by the same reward), and/or a KL strong enough to bind. Diagnostic sweeps
-    (per-op classification of the E-co init vs step 20 vs step 100) and the fix arms are
-    listed in OUTSTANDING.
+    penalised by the same reward), and/or a KL strong enough to bind.
+
+  **Per-op diagnosis (2026-09-04 23:30; full greedy held-out sweeps + classifier of the
+  E-co init, RL step 20 and RL step 100 — `ci_ckpt_{eco_init,rl_eco_step20,rl_eco_step100}_heldout.md`,
+  `cls_ckpt_*_heldout.md`, jobs 3294043-45):** raw held-out acc d1/d4/d8 = 0.996/0.984/0.836
+  (init) → 0.996/0.945/0.789 (step 20) → 0.941/0.766/0.422 (step 100). **Exactly one held-out
+  op fails**: func_0 (`deterministic_shuffle(s)`) episode-ok 0.998 → 0.774 → 0.029 with
+  TypeError 0.002 → 0.221 → 0.964, and its depth-1 recall x_i 1.00 → 1.00 → **0.00**; the
+  other 11 held-out ops stay ≥ 0.99 at every checkpoint. Signature written for func_0:
+  ```
+eco_init         func_0 signature: {'s': 1250, 's, n': 2} | body: {'gcd/multiplier': 1252}
+rl_eco_step20    func_0 signature: {'s': 1082, 's, n': 174} | body: {'gcd/multiplier': 1256}
+rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body: {'gcd/multiplier': 1256}
+  ```
+  i.e. RL on train-op comps sharpened func_5 `add_prefix(s, pre)` (a train op in the RL
+  pool) and func_0 — its name-neighbour attractor already identified in
+  `heldout_failure_mechanism.md` (func_0 → (s, pre) ×148, body from add_prefix) — was pulled
+  into add_prefix's signature and then body, in the weights, until it no longer exists
+  even alone. One op at 0.03 costs d8 0.84 → 0.42 because it appears in ~half of the
+  depth-8 programs. So the "decline" is a single discrete binding overwrite, not diffuse
+  forgetting; the damage was already 22% at step 20, when the depth-1 canary still read
+  1.00 — a depth-1 monitor lags, a 2-3-def canary of each atomically-known skill would
+  have caught it at step 20. Fix arms in OUTSTANDING.
 - Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
   step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
   `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
