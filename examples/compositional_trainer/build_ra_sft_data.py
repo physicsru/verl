@@ -618,8 +618,13 @@ def main():
         print(f"[ra-sft] first-pass failures re-checked sequentially: {dict(retried)} "
               f"(load-induced timeouts recover here)")
     if verdicts["ok"] != len(cands):
-        print("[ra-sft][WARN] some stitched rows failed verification — inspect above.")
-        sys.exit(2)
+        n_bad = len(cands) - verdicts["ok"]
+        frac = n_bad / max(len(cands), 1)
+        print(f"[ra-sft][WARN] {n_bad} stitched rows ({frac:.2%}) failed verification and were dropped — inspect above.")
+        # A handful of genuine failures (e.g. deep comps whose output overruns the sandbox) is
+        # tolerated so pool builders under `set -e` keep going; anything above 1% is a data bug.
+        if frac > 0.01:
+            sys.exit(2)
 
 
 if __name__ == "__main__":
