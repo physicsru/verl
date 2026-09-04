@@ -490,6 +490,25 @@ the pieces are fine and serial execution is the limit. Two levers, both on the E
 
 Fixed budget: no manual stopping; the length early-stop is the only automatic rule.
 
+**Preliminary (2026-09-04 16:20, one seed each):**
+- eco_d28 seed 1 (3291420): train-op d1-8 = **1.000 at every depth**, but held-out d4/d8 =
+  **0.57 / 0.29** (E-co: 0.98 / 0.83). Deep train-op demonstrations perfect the composed
+  ops and squeeze the held-out ones — the RFT / stage15b effect again, amplified (k≈8.6
+  train-op defs per answer). Reading: depth reliability is not demonstration-limited in an
+  op-agnostic way; the demos teach the composed ops. Seeds 7/123 pending.
+- rl-eco-d7to10 (3290812) trajectory (greedy val every 10 steps; step 0 = E-co seed 1):
+  held-out d4/d8 0.98/0.84 → **0.99/0.94 (step 10)** → 0.94/0.79 (20) → 0.89/0.60 (30);
+  rlops d8/d12 0.91/0.62 → 1.00/0.91 (10) → 1.00/0.94; probe d8 0.87 → 0.99; reward 1.16
+  (10) → 1.20 (30, saturated); response length flat ~1300 (no blow-up). So RL on train-op
+  deep comps DOES lift held-out at first (shared mechanical errors), then, once reward
+  saturates and only KL drift remains, squeezes it exactly as line A did. The usable
+  regime is the pre-saturation window (≤ 10-15 steps).
+- Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
+  step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
+  `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
+  `rl-eco-d7to10-k` (job 3292270: same init/data, 30 steps, SAVE_FREQ=TEST_FREQ=5,
+  CKPT_KEEP empty = keep all) to recover the peak; `RL_TRAIN_FILE` added to the driver.
+
 ---
 
 ## N-SCALING (paper50; pre-registered 2026-09-04; data built 14:30, 10 jobs queued on go39)

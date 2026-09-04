@@ -74,7 +74,7 @@ if [ "${RL_PHASE}" = "train" ] || [ "${RL_PHASE}" = "all" ]; then
     echo "==================== RL-RA GRPO train (${RL_DEPTHS}) ===================="
     export RL_METHOD=grpo
     export MODEL_PATH="${INIT}"
-    export TRAIN_FILE="${D}/train_${RL_DEPTHS}${SUF}/train.parquet"
+    export TRAIN_FILE="${RL_TRAIN_FILE:-${D}/train_${RL_DEPTHS}${SUF}/train.parquet}"
     [ -f "${TRAIN_FILE}" ] || { echo "[rl-ra][ERROR] no ${TRAIN_FILE} — run RL_PHASE=prefilter first"; exit 1; }
     export VAL_FILES="${RL_VAL_FILES:-${D}/val/heldout.parquet,${D}/val/rlops.parquet,${D}/val/probe.parquet}"
     export EXPERIMENT_NAME=${EXPERIMENT_NAME:-rl_ra_grpo_${RL_DEPTHS}${SUF}_qwen3_4b}
