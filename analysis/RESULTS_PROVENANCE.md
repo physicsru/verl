@@ -510,12 +510,39 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
   | probe d8 | 0.87 | 0.99 | 0.99 | 0.99 | 0.99 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
   | train reward | — | 1.16 | 1.16 | 1.20 | 1.20 | 1.20 | 1.20 | 1.20 | 1.19 | 1.15 | 1.18 |
 
-  Response length flat 1,220-1,370 (no blow-up; early stop never fired). Reading: RL on
-  train-op deep comps lifts held-out at first (shared mechanical errors: d8 +0.10 in 10
-  steps, d12 rlops +0.29) and then, from the moment reward saturates (step ~30), squeezes
-  it monotonically to BELOW the E-co start (0.77/0.43 vs 0.98/0.84) while rlops/probe sit
-  at ceiling — line A's pattern, now on robust bindings too. The usable regime is the
-  pre-saturation window (≤ 10-15 steps); the 100-step budget was honoured, no manual stop.
+  Response length flat 1,220-1,370 (no blow-up; early stop never fired). The 100-step
+  budget was honoured, no manual stop.
+
+  **Diagnosis from the in-run val metrics (no reward hacking; over-optimisation that
+  rewrites neighbouring held-out signatures):**
+  - Failure form: at every step `exec_ok == score` and `ra_recall_complete` = 1.00 with
+    `ra_n_episodes` constant — no omission, no wrong answers, no format drift. The whole
+    loss is `ra_episode_typeerror_frac` (wrong arity) rising monotonically: d8 0.007 (0) →
+    0.006 (10) → 0.027 (20) → 0.051 (30) → 0.073 (50) → 0.075 (100); d4 0.006 → 0.059.
+  - It reaches **depth 1**: held-out d1 1.00 → 0.94 from step 50 with episode-TypeError
+    0.055 ≈ one of the 12 held-out ops now written with the wrong arity even alone (no
+    load). The binding was overwritten in the weights, not merely out-competed in context.
+  - Train side: rlops episode-TypeError stays 0.000; reward is genuine (exec-verified,
+    1.2 = max), length flat — nothing is being exploited. Policy entropy collapses 0.0022
+    (step 10) → 0.0003 (20) → 0.0000 (80); from step 30 most batches have advantages
+    max = min = 0 (fully saturated, pg_loss 0, grad_norm ≈ 0), and the remaining updates
+    come from rare 7-vs-1 groups whose std-normalised advantages are −2.47 / +0.35 — a
+    few deviant samples on the hardest train-op prompts drive large, one-sided updates.
+    KL term ≈ 0.001 (coef 0.01): no restoring force.
+  - Reading: the decline is NOT reward hacking; it is continued sharpening on train-op
+    programs after the task is solved (entropy → 0), whose collateral is the arity of
+    signature-neighbour held-out ops (the same attractor mechanism as eco_d28 / RFT /
+    stage15b, now via RL). The step-10 lift is the shared-mechanics gain that arrives
+    before the sharpening dominates. Onset (step 10→20) precedes reward saturation (step
+    30), so "stop at saturation" would already be late; the entropy collapse (10× drop
+    by step 20) coincides with the onset — a label-free candidate signal.
+  - What this implies for "when to stop" in general: nothing in the training signal
+    marks the peak except entropy collapse; the robust answer is to remove the cause —
+    keep every skill in the objective (mix multi-task atomic prompts over ALL ops into
+    the RL pool, so sharpening train-op comps at the expense of other ops is itself
+    penalised by the same reward), and/or a KL strong enough to bind. Diagnostic sweeps
+    (per-op classification of the E-co init vs step 20 vs step 100) and the fix arms are
+    listed in OUTSTANDING.
 - Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
   step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
   `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
