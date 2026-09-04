@@ -57,6 +57,9 @@ _ARG2 = {
     "backchain_add_digit": [1, 2], "backchain_palindrome": [1, 2],
     "add_prefix": ["ab", "xq"], "add_suffix": ["ab", "xq"],
     "insert_separator": ["-", "_"],
+    # paper50 extension
+    "wrap_brackets": [1, 2], "caesar_back": [1, 3], "repeat_first": [2, 3], "repeat_last": [2, 3],
+    "sandwich": ["ab", "xq"],
 }
 _TWO_STR = {"interlace_str", "recursive_interlace"}
 

@@ -93,6 +93,11 @@ def random_expr_paper(depth, custom_functions, rng):
     ]
     no_param = [x for x in no_param if x in custom_functions]
     param = [x for x in param if x in custom_functions]
+    # Extension ops (paper50) classify via operators.OP_ARGS; for the `paper` pool none is
+    # present, so its lists and rng stream stay byte-identical.
+    for name in custom_functions:
+        if name in ops_mod.OP_ARGS and name not in no_param and name not in param:
+            (param if ops_mod.OP_ARGS[name] else no_param).append(name)
 
     if (rng.random() < 0.5 and no_param) or not param:
         op = rng.choice(no_param)
@@ -120,6 +125,12 @@ def random_expr_paper(depth, custom_functions, rng):
         return f"backchain_add_digit({sub}, {rng.randint(1, 3)})"
     if op == "backchain_palindrome":
         return f"backchain_palindrome({sub}, {rng.randint(1, 3)})"
+    spec = ops_mod.OP_ARGS.get(op)
+    if spec:
+        kind, lo, hi = spec
+        if kind == "int":
+            return f"{op}({sub}, {rng.randint(lo, hi)})"
+        return f"{op}({sub}, '{_rand_literal(rng, lo, hi)}')"
     return "x"
 
 
@@ -231,9 +242,9 @@ def main():
     custom_functions = ops_mod.get_ops(args.pool, op_split)
     if args.ops:
         names = [n.strip() for n in args.ops.split(",") if n.strip()]
-        unknown = [n for n in names if n not in ops_mod.PAPER_ALL_SET]
+        unknown = [n for n in names if n not in ops_mod.ALL_OPS]
         assert not unknown, f"unknown ops {unknown}"
-        custom_functions = {n: ops_mod.PAPER_ALL_SET[n] for n in names}
+        custom_functions = {n: ops_mod.ALL_OPS[n] for n in names}
         print(f"[config] --ops override: {len(names)} ops {names}")
     source_tag = args.source_tag or args.pool
 

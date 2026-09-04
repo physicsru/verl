@@ -9,7 +9,8 @@ Composition rows (ra_family == "comp") never contain held-out ops and are skippe
     python examples/compositional_trainer/audit_multi_atomic_data.py \
         data/compositional/paper/ra_rft/sft_bootstrap_{eco,eptr,epho,pfirst,plast}
 
-Respects COMPOSITIONAL_NAME_SCHEME via operators.FUNC_RE_STR / func_name_mapping.
+Respects COMPOSITIONAL_NAME_SCHEME via operators.FUNC_RE_STR / func_name_mapping; the held-out
+set follows COMPOSITIONAL_POOL (paper | paper50, default paper).
 """
 import argparse
 import collections
@@ -22,7 +23,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import operators as ops  # noqa: E402
 
-HELDOUT = {ops.func_name_mapping[n] for n in ops.PAPER_EVAL_SET}
+HELDOUT = {ops.func_name_mapping[n] for n in ops.POOLS[os.environ.get("COMPOSITIONAL_POOL", "paper")]["eval"]}
 RECALL_RE = re.compile(rf"Recall ({ops.FUNC_RE_STR}):")
 
 

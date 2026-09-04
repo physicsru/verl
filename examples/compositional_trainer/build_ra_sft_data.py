@@ -402,6 +402,8 @@ def main():
     ap.add_argument("--comp_structure", choices=["any", "serial"], default="any",
                     help="serial = keep only pure nesting chains f(g(...(x))) (no `+`/method calls, "
                          ">=2 calls) among the comp rows — the minimal depth-2 primitive (WALKTHROUGH §20)")
+    ap.add_argument("--pool", choices=list(ops_mod.POOLS), default="paper",
+                    help="operator pool (only used to name the held-out ops for --heldout_atomic_per_op)")
     ap.add_argument("--val_size", type=int, default=256)
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
@@ -572,7 +574,7 @@ def main():
     cands = cands + multi_cands   # for the summary below
 
     if args.heldout_atomic_per_op > 0:
-        heldout_funcs = {ops_mod.func_name_mapping[n] for n in ops_mod.PAPER_EVAL_SET}
+        heldout_funcs = {ops_mod.func_name_mapping[n] for n in ops_mod.POOLS[args.pool]["eval"]}
         boosted = []
         per_op = Counter()
         for row in rows:

@@ -492,6 +492,32 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
 
 ---
 
+## N-SCALING (paper50; pre-registered 2026-09-04; data building, jobs queued by a waiter)
+
+The 2^n question: does the per-op cost of load-robust binding, and the composition-demo
+requirement, stay O(n) as the number of primitives grows? Pool `paper50` = the 25 paper ops
++ 25 extension ops (`operators.py`, func_25..func_49; 13 → train, 12 → eval), so train = 26
+ops, held-out = 24 (the original 12 + 12 new). The paper pool's generation stream is
+byte-identical (regression-checked against HEAD). Data recipe per op unchanged
+(`build_pool_data.sh paper50 num paper50`: 800 stage-1.5 rows/op → 40k + 12k comps,
+400 RA atomic tasks/op → 20k, 16k mixed d2-4 comps over the 26 train ops). Stage-1.5 is
+trained **from base** (no RFT-cx stage-1 exists for 50 ops), so the comparison line is the
+n=25 from-base pair of §① (numfb: v1 0.52±0.24, E-co 0.77±0.07 on the same orig12 file).
+
+| cell (× seeds 1/7/123) | atomic side (50 ops) | comps | tests |
+|---|---|---|---|
+| v1-50 | single-task | 16k d2-4 over 26 train ops | orig12 (= the paper pool's own held-out file, directly comparable), new12, heldout24, trainops26 |
+| eco-50 | E-co grouping | same | same |
+| eco-50-n13 | E-co grouping | the paper pool's 16k comps over its 13 train ops | same |
+
+Predictions. O(n) holds if eco-50 on orig12 ≈ 0.77 (n=25 from base) at the same 400
+rows/op; a clear drop means more competitors need more practice per op (cost grows with n).
+eco-50 vs eco-50-n13 extends the diversity curve (26 vs 13 composed ops at 16k). new12 ≈
+orig12 means the recipe is op-agnostic. v1-50 vs v1 numfb measures interference growth
+without load practice. Decision rule as before (3-seed bands).
+
+---
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
@@ -501,6 +527,8 @@ Fixed budget: no manual stopping; the length early-stop is the only automatic ru
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
+- [ ] N-scaling: paper50 build → stage15b_paper50_frombase → v1-50 / eco-50 / eco-50-n13 × 3
+      (waiter submits; ids go into the N-SCALING section); readouts on orig12 / new12.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /

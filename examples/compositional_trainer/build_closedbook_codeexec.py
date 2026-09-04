@@ -61,9 +61,10 @@ from build_codeexec_data import _BODIES_HIDDEN, CODEEXEC_PROMPT  # noqa: E402
 from reward_fn_codeexec import compute_score  # noqa: E402
 
 # func_N -> (real name, callable)
-FUNC_BY_ID = {mapped: (real, ops_mod.PAPER_ALL_SET[real])
+FUNC_BY_ID = {mapped: (real, ops_mod.ALL_OPS[real])
               for real, mapped in ops_mod.func_name_mapping.items()}
 # func_N ids of TRAIN ops — multi-helper SFT rows must never compose eval ops.
+# Set per pool in main() (--pool); default = paper.
 TRAIN_FUNC_IDS = {ops_mod.func_name_mapping[real] for real in ops_mod.PAPER_TRAIN_SET}
 
 # Recall-plan phrasing pools. The semantics sentence is the op's docstring —
@@ -147,7 +148,11 @@ def main():
     ap.add_argument("--validate_e2e", type=int, default=32,
                     help="additionally run N random rows through reward_fn_codeexec end-to-end")
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--pool", choices=list(ops_mod.POOLS), default="paper",
+                    help="operator pool (train/eval split) the sources were generated from")
     args = ap.parse_args()
+    global TRAIN_FUNC_IDS
+    TRAIN_FUNC_IDS = {ops_mod.func_name_mapping[real] for real in ops_mod.POOLS[args.pool]["train"]}
 
     by_op = defaultdict(list)
     n_src = n_primitive = 0
@@ -191,7 +196,7 @@ def main():
                     {"role": "assistant", "content": target},
                 ],
                 "extra_info": {
-                    "pool": "paper", "stage": 1, "depth": 1, "op": fid,
+                    "pool": args.pool, "stage": 1, "depth": 1, "op": fid,
                     "op_split": op_split, "condition": "code_exec_closedbook",
                 },
             }
@@ -239,7 +244,7 @@ def main():
                         {"role": "assistant", "content": target},
                     ],
                     "extra_info": {
-                        "pool": "paper", "stage": 1, "depth": depth,
+                        "pool": args.pool, "stage": 1, "depth": depth,
                         "op": "+".join(sorted(ids, key=ops_mod.FUNC_ORDER.__getitem__)),
                         "op_split": "train", "condition": "code_exec_closedbook",
                     },
@@ -260,7 +265,7 @@ def main():
         ref_code, x = m.group(1), m.group(2)
         env = {}
         exec("from math import gcd\n\n"
-             + _rename("\n\n".join(inspect.getsource(fn) for fn in ops_mod.PAPER_ALL_SET.values()))
+             + _rename("\n\n".join(inspect.getsource(fn) for fn in ops_mod.ALL_OPS.values()))
              + "\n\n" + ref_code, env)
         gt = json.dumps({"ref_input": {"x": x}, "ref_output": env["main_solution"](x),
                          "ref_code": ref_code, "funcname": "main_solution"})

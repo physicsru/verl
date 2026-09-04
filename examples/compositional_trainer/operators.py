@@ -236,6 +236,180 @@ def backchain_palindrome(s, depth):
 
 
 # ---------------------------------------------------------------------------
+# Extension ops (paper50 pool, 2026-09-04): 25 more skills in the same style —
+# pure, total on any string (incl. ""), bounded growth (<= x2 + const), one-line
+# docstring = the gloss (must not contain another op's name). They get
+# func_25..func_49; the first 25 names/ids are untouched, so the `paper` pool
+# stays byte-faithful. 13 join the train split, 12 the eval split (see POOLS).
+# ---------------------------------------------------------------------------
+
+
+def swap_pairs(s):
+    """Swap every two adjacent characters (a trailing single character stays)."""
+    chars = list(s)
+    for i in range(0, len(chars) - 1, 2):
+        chars[i], chars[i + 1] = chars[i + 1], chars[i]
+    return ''.join(chars)
+
+
+def rotate_halves(s):
+    """Swap the first half and the second half of the string."""
+    m = len(s) // 2
+    return s[m:] + s[:m]
+
+
+def double_vowels(s):
+    """Write every vowel twice."""
+    return ''.join(ch * 2 if ch in 'aeiouAEIOU' else ch for ch in s)
+
+
+def count_prefix(s):
+    """Prepend the number of characters to the string."""
+    return str(len(s)) + s
+
+
+def dedup_chars(s):
+    """Keep only the first occurrence of each character."""
+    seen = set()
+    result = []
+    for ch in s:
+        if ch not in seen:
+            seen.add(ch)
+            result.append(ch)
+    return ''.join(result)
+
+
+def interleave_reverse(s):
+    """Alternate the characters of the string with those of its reverse."""
+    r = s[::-1]
+    return ''.join(a + b for a, b in zip(s, r))
+
+
+def halve_string(s):
+    """Keep the first half of the string (rounding up)."""
+    return s[:(len(s) + 1) // 2]
+
+
+def wrap_brackets(s, n):
+    """Wrap the string in n layers of square brackets."""
+    for _ in range(n):
+        s = '[' + s + ']'
+    return s
+
+
+def caesar_back(s, shift):
+    """Shift letters backwards in the alphabet by a fixed amount (wrapping); other characters unchanged."""
+    out = []
+    for ch in s:
+        if 'a' <= ch <= 'z':
+            out.append(chr((ord(ch) - ord('a') - shift) % 26 + ord('a')))
+        elif 'A' <= ch <= 'Z':
+            out.append(chr((ord(ch) - ord('A') - shift) % 26 + ord('A')))
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def repeat_first(s, n):
+    """Prepend the first character repeated n times."""
+    if not s:
+        return s
+    return s[0] * n + s
+
+
+def mark_vowels(s):
+    """Put an asterisk after every vowel."""
+    return ''.join(ch + '*' if ch in 'aeiouAEIOU' else ch for ch in s)
+
+
+def zigzag(s):
+    """Characters at even positions first, then characters at odd positions."""
+    return s[0::2] + s[1::2]
+
+
+def move_max_end(s):
+    """Move the largest character (first occurrence) to the end."""
+    if not s:
+        return s
+    i = s.index(max(s))
+    return s[:i] + s[i + 1:] + s[i]
+
+
+def upper_vowels(s):
+    """Uppercase every vowel."""
+    return ''.join(ch.upper() if ch in 'aeiou' else ch for ch in s)
+
+
+def remove_consonants(s):
+    """Remove consonant letters, keeping vowels and non-letters."""
+    return ''.join(ch for ch in s if not (ch.isalpha() and ch.lower() not in 'aeiou'))
+
+
+def double_middle(s):
+    """Write the middle character twice."""
+    if not s:
+        return s
+    m = len(s) // 2
+    return s[:m] + s[m] * 2 + s[m + 1:]
+
+
+def strip_edges(s):
+    """Drop the first and the last character."""
+    return s[1:-1] if len(s) >= 2 else ''
+
+
+def letters_to_digits(s):
+    """Replace each letter by its position in the alphabet modulo 10 (a=1, j=0); other characters unchanged."""
+    out = []
+    for ch in s:
+        if ch.isalpha():
+            out.append(str((ord(ch.lower()) - ord('a') + 1) % 10))
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def append_length(s):
+    """Append the number of characters to the string."""
+    return s + str(len(s))
+
+
+def sandwich(s, ch):
+    """Put the same fixed text at both ends of the string."""
+    return ch + s + ch
+
+
+def every_other(s):
+    """Keep every other character, starting with the first."""
+    return s[::2]
+
+
+def repeat_last(s, n):
+    """Append the last character repeated n times."""
+    if not s:
+        return s
+    return s + s[-1] * n
+
+
+def reverse_pairs(s):
+    """Split into blocks of two characters and reverse the order of the blocks."""
+    blocks = [s[i:i + 2] for i in range(0, len(s), 2)]
+    return ''.join(reversed(blocks))
+
+
+def sort_desc(s):
+    """Sort the characters in descending order."""
+    return ''.join(sorted(s, reverse=True))
+
+
+def swap_ends(s):
+    """Swap the first and the last character."""
+    if len(s) < 2:
+        return s
+    return s[-1] + s[1:-1] + s[0]
+
+
+# ---------------------------------------------------------------------------
 # Opaque renaming (verbatim) — names leak nothing about the operation
 # ---------------------------------------------------------------------------
 
@@ -265,6 +439,32 @@ func_name_mapping = {
     "verify_even_length": 'func_22',
     "backchain_add_digit": 'func_23',
     "backchain_palindrome": 'func_24',
+    # paper50 extension (func_25..func_49): 13 train, then 12 eval
+    "swap_pairs": 'func_25',
+    "rotate_halves": 'func_26',
+    "double_vowels": 'func_27',
+    "count_prefix": 'func_28',
+    "dedup_chars": 'func_29',
+    "interleave_reverse": 'func_30',
+    "halve_string": 'func_31',
+    "wrap_brackets": 'func_32',
+    "caesar_back": 'func_33',
+    "repeat_first": 'func_34',
+    "mark_vowels": 'func_35',
+    "zigzag": 'func_36',
+    "move_max_end": 'func_37',
+    "upper_vowels": 'func_38',
+    "remove_consonants": 'func_39',
+    "double_middle": 'func_40',
+    "strip_edges": 'func_41',
+    "letters_to_digits": 'func_42',
+    "append_length": 'func_43',
+    "sandwich": 'func_44',
+    "every_other": 'func_45',
+    "repeat_last": 'func_46',
+    "reverse_pairs": 'func_47',
+    "sort_desc": 'func_48',
+    "swap_ends": 'func_49',
 }
 
 # Alternative OPAQUE, NON-NUMERIC names (name-collision ablation, HISTORY §17):
@@ -274,19 +474,28 @@ func_name_mapping = {
 # are the scheme-aware regex + canonical sort order every consumer must use.
 _ALT_TOKENS = ["qzk", "wrm", "vex", "hjd", "tolf", "brug", "lsiw", "kacy", "dmov", "nupx",
                "gethy", "rybon", "sfin", "cowl", "xque", "mafo", "ubjet", "ykher", "pidz",
-               "enrov", "javt", "owgis", "aqes", "ilcum", "umket"]
+               "enrov", "javt", "owgis", "aqes", "ilcum", "umket",
+               # paper50 extension (func_25..func_49)
+               "jol", "koga", "ivop", "cedi", "tajo", "hul", "daqu", "par", "iqog", "ulof", "wucih", "sizem", "axaq",
+               "sajuw", "ogeg", "wom", "nodo", "ocaz", "kef", "mexap", "atah", "upic", "upaz", "iqup", "gakuf"]
 # Second letter scheme (different random assignment) to check that an `alt` effect is not one
 # lucky name→op assignment. COMPOSITIONAL_NAME_SCHEME=alt2.
 _ALT2_TOKENS = ["ubiz", "osub", "xojum", "daj", "qotu", "emon", "hocif", "zeqi", "eqah", "zedu",
                 "hevul", "sirov", "demad", "viwus", "azes", "vux", "reben", "fapoc", "lafud", "jiva",
-                "sotox", "qos", "apeq", "imig", "uzuw"]
+                "sotox", "qos", "apeq", "imig", "uzuw",
+                # paper50 extension (func_25..func_49)
+                "duvi", "kam", "exag", "xuj", "nuca", "mar", "quc", "huj", "wol", "ceq", "aqun", "vevu", "teto",
+                "qobab", "qawos", "xoji", "jeguc", "bac", "muf", "lux", "uwuq", "idiv", "kev", "foq", "dugu"]
 NAME_SCHEME = os.environ.get("COMPOSITIONAL_NAME_SCHEME", "num")
 assert NAME_SCHEME in ("num", "alt", "alt2"), f"COMPOSITIONAL_NAME_SCHEME={NAME_SCHEME!r}"
 if NAME_SCHEME == "alt":
     func_name_mapping = {op: f"func_{tok}" for op, tok in zip(list(func_name_mapping), _ALT_TOKENS)}
 elif NAME_SCHEME == "alt2":
     func_name_mapping = {op: f"func_{tok}" for op, tok in zip(list(func_name_mapping), _ALT2_TOKENS)}
+assert len(set(func_name_mapping.values())) == len(func_name_mapping), "duplicate opaque names"
 FUNC_RE_STR = r"func_\d+" if NAME_SCHEME == "num" else r"func_[a-z]+"
+# Every op the module knows (50), real name -> callable; pools below pick subsets.
+ALL_OPS = {name: globals()[name] for name in func_name_mapping}
 FUNC_ORDER = {fn: i for i, fn in enumerate(func_name_mapping.values())}
 GCD_FUNC = func_name_mapping["deterministic_shuffle"]   # the one op whose body needs `from math import gcd`
 
@@ -358,6 +567,24 @@ PARAM_SPECS = {
     "loop_concat": ("n", 2, 4),
     "backchain_add_digit": ("depth", 1, 3),
     "backchain_palindrome": ("depth", 1, 3),
+    # paper50 extension
+    "wrap_brackets": ("n", 1, 3),
+    "caesar_back": ("shift", 1, 5),
+    "repeat_first": ("n", 2, 4),
+    "repeat_last": ("n", 2, 4),
+}
+
+# Argument specs of the EXTENSION ops for the generator (the original 25 are rendered by
+# generate_data.random_expr_paper's verbatim if-chain, which must stay byte-identical):
+# None = unary; ("int", lo, hi) = numeric constant; ("lit", lo, hi) = random letter literal.
+OP_ARGS = {
+    "swap_pairs": None, "rotate_halves": None, "double_vowels": None, "count_prefix": None,
+    "dedup_chars": None, "interleave_reverse": None, "halve_string": None,
+    "wrap_brackets": ("int", 1, 3), "caesar_back": ("int", 1, 5), "repeat_first": ("int", 2, 4),
+    "mark_vowels": None, "zigzag": None, "move_max_end": None,
+    "upper_vowels": None, "remove_consonants": None, "double_middle": None, "strip_edges": None,
+    "letters_to_digits": None, "append_length": None, "sandwich": ("lit", 1, 2), "every_other": None,
+    "repeat_last": ("int", 2, 4), "reverse_pairs": None, "sort_desc": None, "swap_ends": None,
 }
 
 # Length-preserving ops that take a numeric constant.
@@ -367,8 +594,17 @@ LENPRES_PARAM = {"rotate_str", "shift_chars", "while_rotate"}
 # Pool registry
 # ---------------------------------------------------------------------------
 
+# paper50: the paper pool plus the 25 extension ops (13 -> train, 12 -> eval): n-scaling test
+# of the O(#ops) claim (RESULTS_PROVENANCE "H0/H1 RESULTS" -> next step 1).
+PAPER50_NEW_TRAIN = ["swap_pairs", "rotate_halves", "double_vowels", "count_prefix", "dedup_chars", "interleave_reverse", "halve_string", "wrap_brackets", "caesar_back", "repeat_first", "mark_vowels", "zigzag", "move_max_end"]
+PAPER50_NEW_EVAL = ["upper_vowels", "remove_consonants", "double_middle", "strip_edges", "letters_to_digits", "append_length", "sandwich", "every_other", "repeat_last", "reverse_pairs", "sort_desc", "swap_ends"]
+PAPER50_TRAIN_SET = {**PAPER_TRAIN_SET, **{n: ALL_OPS[n] for n in PAPER50_NEW_TRAIN}}
+PAPER50_EVAL_SET = {**PAPER_EVAL_SET, **{n: ALL_OPS[n] for n in PAPER50_NEW_EVAL}}
+PAPER50_ALL_SET = {**PAPER50_TRAIN_SET, **PAPER50_EVAL_SET}
+
 POOLS = {
     "paper": {"train": PAPER_TRAIN_SET, "eval": PAPER_EVAL_SET, "all": PAPER_ALL_SET},
+    "paper50": {"train": PAPER50_TRAIN_SET, "eval": PAPER50_EVAL_SET, "all": PAPER50_ALL_SET},
     "lenpres": {"train": LENPRES_TRAIN, "eval": LENPRES_EVAL, "all": LENPRES_ALL},
 }
 
