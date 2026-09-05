@@ -563,6 +563,24 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   forgetting; the damage was already 22% at step 20, when the depth-1 canary still read
   1.00 — a depth-1 monitor lags, a 2-3-def canary of each atomically-known skill would
   have caught it at step 20. Fix arms in OUTSTANDING.
+
+  **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
+  identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
+
+  | step | 0 | 5 | 10 | 15 | 20 | 25 | 30 |
+  |---|---|---|---|---|---|---|---|
+  | held-out d4 / d8 | 0.98 / 0.84 | 0.97 / **0.93** | 0.98 / 0.89 | 0.96 / 0.73 | 0.93 / 0.55 | 0.91 / 0.39 | 0.87 / 0.32 |
+  | held-out d8 episode-TypeError | 0.007 | 0.005 | 0.012 | 0.034 | 0.061 | 0.092 | 0.109 |
+  | rlops d12 | 0.62 | 0.82 | 0.89 | 0.92 | 0.94 | 0.95 | 0.95 |
+  | reward | — | 1.11 | 1.15 | 1.17 | 1.15 | 1.18 | 1.20 |
+  | actor entropy | — | 0.0006 | 0.0019 | 0.0010 | 0.0006 | 0.0006 | 0.0007 |
+
+  Same shape, peak earlier (step 5) and decline steeper (step 20 d8 0.55 vs 0.79 in the
+  first run) — the onset is rng-dependent. **Entropy is NOT a usable stop signal**: it is
+  ≈0.001 from step 1 and does not move with the onset (the "10× collapse" in the first run
+  was one run's fluctuation; retracted). Nothing in the training-side metrics (reward,
+  KL, length, entropy) marks the peak; only the held-out canary does. Peak checkpoints
+  (steps 5, 10) kept; diagnostic sweeps submitted (`sw-rlk5`, `sw-rlk10`).
 - Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
   step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
   `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
@@ -571,7 +589,7 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
 
 ---
 
-## N-SCALING (paper50; pre-registered 2026-09-04; data built 14:30, 10 jobs queued on go39)
+## N-SCALING (paper50; pre-registered 2026-09-04; COMPLETE 2026-09-05, 3 seeds per cell)
 
 The 2^n question: does the per-op cost of load-robust binding, and the composition-demo
 requirement, stay O(n) as the number of primitives grows? Pool `paper50` = the 25 paper ops
@@ -602,6 +620,51 @@ eco-50 vs eco-50-n13 extends the diversity curve (26 vs 13 composed ops at 16k).
 orig12 means the recipe is op-agnostic. v1-50 vs v1 numfb measures interference growth
 without load practice. Decision rule as before (3-seed bands).
 
+**RESULTS** (held-out CI d4 / d8, mean±sd over seeds 1/7/123; `ci_ra_abl_paper50_<var>[_s*]_b3072[_orig12|_new12|_trainops].md`):
+
+| cell | orig12 (same file as every paper-pool number) | new12 | heldout24 | trainops26 |
+|---|---|---|---|---|
+| n=25 v1 (numfb, from base) | 0.52±0.24 / 0.21±0.14 | — | — | trainops13 ≈1.00 / 0.89 |
+| n=25 E-co (numfb, from base) | 0.77±0.07 / 0.52±0.26 | — | — | 1.00 / 0.87 |
+| **v1-50** | 0.64±0.11 / 0.21±0.14 | 0.72±0.13 / 0.32±0.11 | 0.64±0.11 / 0.24±0.10 | 1.00 / 0.73±0.02 |
+| **eco-50** | **0.79±0.11** / 0.32±0.15 | 0.97±0.03 / 0.67±0.17 | 0.85±0.08 / 0.41±0.12 | 1.00 / 0.74±0.01 |
+| eco-50-n13 (comps over the paper's 13 train ops only) | 0.67±0.19 / 0.24±0.21 | 0.94±0.06 / 0.75±0.01 | 0.78±0.14 / 0.36±0.17 | 1.00 / 0.77±0.02 |
+
+Test-set geometry (distinct ops per program, k): orig12 identical to the paper pool (3.95 /
+6.08 / 7.79 at d4/6/8); new12 is EASIER (k 3.49 / 4.98 / 6.71 — the extension ops include
+no two-string op, so binary branches fall to `+`), so new12 vs orig12 is not an op-agnosticity
+test; heldout24 and trainops26 are HARDER at depth (k 9.90 / 10.04 at d8 vs 7.79 / 8.64).
+eco-50 data: 89% of held-out defs under load (audit), same as E-co.
+
+Readings:
+1. **Per-op binding cost is O(n) at mid depth: confirmed.** eco-50 on the paper's own 12
+   held-out ops at the paper's own 400 atomic tasks/op = 0.79±0.11 vs 0.77±0.07 at n=25 —
+   identical, with 25 more competitors in every multi-def context and in the weights. v1-50
+   (0.64±0.11) is not worse than v1-25 (0.52±0.24) either: interference without load
+   practice does not grow with n.
+2. **Deep-depth reliability got worse for everyone at n=50, on identical programs:** eco-50
+   orig12 d8 0.32 vs 0.52 (n=25; seeds 0.49/0.13/0.34 vs 0.87/0.46/0.25, overlapping bands),
+   and train-op d8 0.74 vs 0.87 (there the test is also harder, k 10.0 vs 8.6). Since
+   orig12 is the same file, the drop is a model property. The comp budget was held at 16k
+   while the composed ops doubled 13 → 26, so per-op composition exposure halved; the
+   component that decays with depth (C) tracks the per-op composition exposure of the
+   composed ops, i.e. the composition side also wants O(n) rows (per-op coverage), not O(1).
+   Refines the earlier "composition side is O(1)" claim to: O(1) in *kinds* of demonstration
+   (one depth suffices), O(n) in *rows* to keep per-op coverage.
+3. **Diversity of composed ops at fixed budget: 26 vs 13** — eco-50 ≥ eco-50-n13 on every
+   held-out set (0.79 vs 0.67 orig12, 0.85 vs 0.78 heldout24, 0.97 vs 0.94 new12) but the
+   bands overlap (sd 0.11-0.19); direction matches the nops4/8/13 curve, not decisive at n=3.
+4. **The new 12 held-out ops compose at 0.97±0.03 (d4) with zero composition data** — the
+   recipe transfers to a fresh op set built after the method was fixed (no tuning on them).
+5. Init caveat (#9) applies: all from-base. The paper-pool headline (0.97 on the RFT-cx
+   init) has no n=50 counterpart yet.
+
+Verdict on the 2^n question: the per-skill cost of load-robust binding does not grow
+with the number of skills (item 1), composition demos need per-op coverage (O(n)) but not
+combinatorial coverage (item 2, and the paper-pool d12/C3/C4b results), and unseen skills
+compose at the rate their binding allows (item 4). Nothing measured scales with the
+number of compositions.
+
 ---
 
 ## OUTSTANDING (for the next session)
@@ -613,8 +676,10 @@ without load practice. Decision rule as before (3-seed bands).
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
-- [ ] N-scaling: 10 jobs queued (3291573-82); read `ci_ra_abl_paper50_*_orig12.md` first
-      (comparable to numfb), then new12 / heldout24; fill the N-SCALING table.
+- [x] N-scaling: done 2026-09-05 (table above); per-op classification of eco-50 on orig12
+      (`cls_paper50_eco_orig12.md`) pending on the login node.
+- [ ] N-scaling follow-up: eco-50 with comps scaled to 32k (per-op coverage matched to the
+      paper pool) — tests reading 2 directly.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
       seed, or stage-1.5 from base with 3 seeds — the headline's sd is understated.
 - [ ] RL-E-co: rerun with save_freq=10 + early stop on response length /
