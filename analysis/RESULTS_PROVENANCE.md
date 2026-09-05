@@ -837,6 +837,18 @@ step-100 model is a train-op specialist (1.00 everywhere) whose held-out loss is
 damage on the two arity-2 twins. Defs-only rescoring of these sweeps:
 `rescore_defs_only_deep.md` (pending).
 
+**Next cells (pre-registered 2026-09-06):**
+- **ecow12** (wide E-co; submitted, 3 seeds, tests heldout+trainops+serialho+serialtr): identical to
+  E-co except `--max_extra_tasks 11` → atomic groups of 1-12 tasks (measured: 99% of held-out
+  defs under load, group sizes 2-12 with mode 8-9, 17,247 rows, max sequence 2,736 tokens).
+  Prediction: binding at full load fixes the two arity-2 twins (add_suffix, backchain_palindrome
+  ≥ 0.98 episode-ok on chains) and the omission at k ≈ 12; the transcription share (syntax) is
+  unchanged → held-out d20 rises from 0.50 toward ~0.65 standard / ~0.9 defs-only.
+- **RL on deep serial chains** (pool prepared, NOT submitted: `structured/serial_deep_trainops_rlpool.parquet`,
+  9,000 train-op chains d10-20, output ≤ 1,000 chars): from the RL peak or E-co, mixed with
+  wide atomic prompts, SAVE/TEST every 5, keep-all, peak by the serial held-out val. Design
+  choices (init, mix ratio) pending.
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out
