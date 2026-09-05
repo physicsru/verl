@@ -600,6 +600,33 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   collateral is not fixable by the reward alone at KL 0.01 → KL / LR arms. If (ii) fails →
   the atomic half starves the composition objective → change the mix ratio.
 
+  **RESULT (2026-09-05 22:10, 100 steps complete; `ci_rl_ra_grpo_d7to10_ecoinit_mix_{heldout,rlops,probe}.md`):**
+
+  | step | 0 | 5 | 10 | 20 | 30 | 40 | 50 | 60 | **65** | 70 | 80 | 90 | 100 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | held-out d4 (mixed) | 0.98 | 0.98 | 0.95 | 0.93 | 0.89 | 0.89 | 0.87 | 0.87 | 0.86 | 0.90 | 0.91 | 0.92 | **0.93** |
+  | held-out d8 (mixed) | 0.84 | **0.94** | 0.91 | 0.88 | 0.88 | 0.86 | 0.84 | 0.68 | **0.64** | 0.78 | 0.85 | 0.86 | **0.88** |
+  | held-out d8 episode-TypeError (mixed) | 0.007 | 0.005 | 0.011 | 0.012 | 0.013 | 0.017 | 0.021 | 0.043 | 0.051 | 0.027 | 0.012 | 0.011 | 0.012 |
+  | held-out d1 (mixed) | 0.99 | 1.00 | 0.99 | 0.99 | 0.99 | 1.00 | 0.99 | 0.99 | 0.99 | 0.99 | 1.00 | 0.99 | 0.99 |
+  | rlops d12 (mixed) | 0.62 | 0.82 | 0.88 | 0.91 | 0.94 | 0.95 | 0.95 | 0.96 | 0.96 | 0.95 | 0.95 | 0.95 | 0.96 |
+  | held-out d4 / d8 (BLIND run) | 0.98 / 0.84 | — | 0.99 / 0.94 | 0.94 / 0.79 | 0.89 / 0.60 | 0.86 / 0.54 | 0.79 / 0.45 | 0.78 / 0.43 | — | 0.77 / 0.42 | 0.77 / 0.43 | 0.77 / 0.43 | 0.77 / 0.43 |
+
+  Reward saturates at 1.20 from step 20 in both runs; response length 800-900 (mixed) —
+  no blow-up. Verdict against the pre-registration: (ii) met (rlops d12 0.96, d8 1.00,
+  probe 0.99 — the composition objective is not starved by the atomic half); (i) met at
+  the END (d8 0.88 ≥ 0.84 start; d4 0.93 vs 0.98) but NOT throughout: the same drift
+  starts (TE rising from step 10, d8 sliding to **0.64 at step 65**) and is then
+  **reversed** (TE 0.051 → 0.012, d8 back to 0.88 by step 80-100) while the blind run
+  sits at 0.43 — the restoring gradient exists but only engages once the drift produces
+  wrong answers on atomic prompts (until then those groups are all-correct, advantage 0).
+  Depth 1 never moves (0.99 throughout) — the atomic prompts guard the definition itself.
+  (iii) pending: per-op sweeps of steps 10 / 50 / 100 submitted (3298411-13). Reading:
+  making the reward see every skill turns a monotone, permanent overwrite into a bounded,
+  self-correcting excursion; it does not prevent the excursion. Levers for the excursion
+  depth (untested): a larger atomic share or up-weighted atomic groups, a stronger KL, or
+  sampling the atomic prompts adversarially (skills whose groups were recently mixed).
+  The gj26 twin `mixg` (3297069) is running as a second seed of this arm.
+
   **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
   identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
 
