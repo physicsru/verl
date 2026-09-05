@@ -786,7 +786,10 @@ number of compositions.
       TE 0.004)** → 0.94/0.89 (15); rlops d12 0.62 → 0.90; `ci_rl_ra_grpo_d7to10_ecoinit_k2g_*.md`.
       Third replicate of the blind run's early window (peaks: run 1 step 10, run 2 step 5,
       run 3 step 10). Per-op sweeps of the step-5 / step-10 ckpts: 3298541 / 3298542 (gj26).
-      3296770 (go39 twin) still queued — a 4th replicate if it runs.
+      3296770 (go39 twin) = 4th replicate, DONE 23:26: held-out d4/d8 0.98/0.84 → 0.97/0.93 (5)
+      → 0.97/0.93 (10) → **0.98/0.95 (15, TE 0.005 — no decline yet)**; rlops d12 0.61 → 0.91;
+      `ci_rl_ra_grpo_d7to10_ecoinit_k2_*.md`. Onset of the decline is rng-dependent: run 2
+      had already fallen to 0.73 at step 15, run 4 had not moved.
 - [x] N-scaling: done 2026-09-05 (table above). Per-op classification of eco-50 on orig12
       (`cls_paper50_eco_orig12.md`): seeds 1 and 123 have all 12 held-out ops ≥ 0.9
       episode-ok; seed 7 has exactly one collapsed op, func_24 backchain_palindrome
