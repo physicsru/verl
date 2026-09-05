@@ -799,6 +799,44 @@ number of compositions.
 
 ---
 
+## DEEP CHAINS d1-20 (2026-09-06): the depth axis measured properly
+
+**Why a new test.** In the paper generator, "depth 20" is not composition depth: a 64-row d20
+held-out smoke has k = 11.9 distinct ops (all 12, saturated since ~d10) but **≈200 call sites
+(max 540), a 1,221-token skeleton (max 3,382) and 10.9k-char outputs (max 143k)** — the 20%
+binary branch makes the expression tree grow ~1.2^d. That is a transcription/length test
+(the paper stops at d8 for the same reason). The depth axis proper = pure nesting chains
+f1(f2(…fd(x))): `generate_structured.py --serial_depths 1,2,4,…,20 --max_out 1000`
+(`data/compositional/paper/structured/serial_deep_{heldout,trainops}_test.parquet`, 11 depths
+× 256, seed 11; d20 skeleton ≈ 110 tokens, k ≈ 9.9 of the 12 held-out ops (with repeats),
+outputs ≤ 1,000 chars). Driver test sets `serialho` / `serialtr`; single-ckpt sweeps via
+`run_ckpt_sweep.sh TEST=custom`.
+
+**Existing checkpoints on the chains (greedy @3072; `ci_ckpt_deep_*_custom.md`, `cls_ckpt_deep_*`):**
+
+| model | set | d1 | d2 | d4 | d6 | d8 | d10 | d12 | d14 | d16 | d18 | **d20** |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| E-co seed 1 | held-out | 1.00 | 1.00 | 0.99 | 0.97 | 0.92 | 0.87 | 0.78 | 0.73 | 0.68 | 0.55 | **0.50** |
+| E-co seed 1 | train-op | 1.00 | 1.00 | 1.00 | 1.00 | 0.99 | 0.97 | 0.95 | 0.90 | 0.83 | 0.73 | 0.69 |
+| RL peak (blind k2g step 10) | held-out | 1.00 | 1.00 | 1.00 | 0.99 | 0.95 | 0.95 | 0.93 | 0.89 | 0.86 | 0.81 | **0.85** |
+| RL peak | train-op | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.99 | 0.96 | 0.98 | 0.96 | 0.94 |
+| mixed-pool seed 1 step 100 | held-out | 1.00 | 0.99 | 0.97 | 0.91 | 0.85 | 0.76 | 0.73 | 0.73 | 0.60 | 0.61 | 0.60 |
+| mixed-pool seed 1 step 100 | train-op | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.99 |
+
+Held-out failure buckets (of 256): E-co d20 = 91 syntax (paren copy of the 20-deep skeleton
+in the Assemble block) + 17 TypeError + 16 episode omission; RL peak d20 = 13 syntax + 14
+TypeError + 0 omission; mixed step 100 d16/d20 = 86 TypeError + 13-14 NameError, 0-3 syntax.
+Per-op (held-out, d2-20 pooled): the only weak ops are the two arity-2 ones with a train-op
+signature twin — func_6 add_suffix(s, suf) (E-co 0.945 / RL peak 0.974 / mixed 0.814) and
+func_24 backchain_palindrome(s, depth) (0.948 / 0.983 / 0.856); the other 10 are ≥ 0.99
+everywhere. Reading: (i) the RL peak checkpoint (trained only on d7-10 mixed-tree train-op
+comps) extrapolates to held-out chains of depth 20 at 0.85 with zero omissions — the depth
+gain is real and op-agnostic; (ii) E-co's deep loss is dominated by transcription of the
+given skeleton (91/128 failures at d20), i.e. not a compositional skill; (iii) the mixed
+step-100 model is a train-op specialist (1.00 everywhere) whose held-out loss is binding
+damage on the two arity-2 twins. Defs-only rescoring of these sweeps:
+`rescore_defs_only_deep.md` (pending).
+
 ## OUTSTANDING (for the next session)
 
 - [ ] ③ co-occurrence: pfirst/plast seed 123; eptr rebuilt with ≥90% of held-out

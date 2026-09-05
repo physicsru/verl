@@ -139,6 +139,12 @@ for VAR in ${VARIANTS}; do
                       export ROLLOUT_DIR="${RA_ROOT}/orig12_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
             new12)    export STAGE1_FILE="${_BASE}/stage2_level1to8_new12_codeexec/test.parquet"
                       export ROLLOUT_DIR="${RA_ROOT}/new12_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
+            # deep serial chains d1-20 (generate_structured.py --serial_depths ... --max_out 1000), the
+            # depth axis without the mixed tree's exponential blow-up (ledger "DEEP CHAINS")
+            serialho) export STAGE1_FILE="${_BASE}/structured/serial_deep_heldout_test.parquet"
+                      export ROLLOUT_DIR="${RA_ROOT}/serialho_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
+            serialtr) export STAGE1_FILE="${_BASE}/structured/serial_deep_trainops_test.parquet"
+                      export ROLLOUT_DIR="${RA_ROOT}/serialtr_sweep_${VAR}${TAG_SFX}${SEED_TAG}${BUDGET_TAG}" ;;
             *) echo "[ra-abl][ERROR] unknown test set ${TS}"; exit 1 ;;
         esac
         N_ROLLOUTS=$((N_ROLLOUTS + 1))
