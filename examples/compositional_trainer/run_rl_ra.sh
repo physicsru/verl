@@ -92,7 +92,11 @@ if [ "${RL_PHASE}" = "train" ] || [ "${RL_PHASE}" = "all" ]; then
     export TEST_FREQ=${TEST_FREQ:-10}
     export SAVE_FREQ=${SAVE_FREQ:-50}
     export EARLY_STOP_RESP_LEN=${EARLY_STOP_RESP_LEN:-}   # e.g. 1500 with SAVE_FREQ=10 (RL-E-co rerun)
+    # CKPT_KEEP: last-N actor ckpts to keep (verl max_actor_ckpt_to_keep); default 3. An EMPTY
+    # value does NOT mean keep-all (`:-` treats empty as unset, and verl pruned steps 5-15 of
+    # job 3292270 that way — ledger #10); pass CKPT_KEEP=all (or a large number) for keep-all.
     export CKPT_KEEP=${CKPT_KEEP:-3}
+    [ "${CKPT_KEEP}" = "all" ] && export CKPT_KEEP=100000
     export VAL_BATCH_SIZE=${VAL_BATCH_SIZE:-512}
     launch_training
     [ -n "${RL_VAL_FILES:-}" ] && { echo "==================== RL-RA (${RL_PHASE}) finished ===================="; exit 0; }

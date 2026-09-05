@@ -580,7 +580,10 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   ≈0.001 from step 1 and does not move with the onset (the "10× collapse" in the first run
   was one run's fluctuation; retracted). Nothing in the training-side metrics (reward,
   KL, length, entropy) marks the peak; only the held-out canary does. Peak checkpoints
-  (steps 5, 10) kept; diagnostic sweeps submitted (`sw-rlk5`, `sw-rlk10`).
+  were LOST AGAIN: `CKPT_KEEP=` (empty) is not keep-all (`${VAR:-3}` treats empty as
+  unset) — steps 5/10/15 pruned, 20/25/30 kept. Driver now maps CKPT_KEEP=all; third run
+  `rl-eco-d7to10-k2` (job 3295454: 15 steps, save/val every 5, keep-all) to capture the
+  peak for the per-op sweep.
 - Issue #10: `run_rl_ra.sh` keeps only the last 3 checkpoints (CKPT_KEEP=3), so the
   step-10 checkpoint was deleted when step 40 saved; step 20 was copied to
   `rl_ra_grpo_d7to10_ecoinit_qwen3_4b/keep_global_step_20/huggingface`. Rerun
@@ -676,8 +679,11 @@ number of compositions.
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
-- [x] N-scaling: done 2026-09-05 (table above); per-op classification of eco-50 on orig12
-      (`cls_paper50_eco_orig12.md`) pending on the login node.
+- [x] N-scaling: done 2026-09-05 (table above). Per-op classification of eco-50 on orig12
+      (`cls_paper50_eco_orig12.md`): seeds 1 and 123 have all 12 held-out ops ≥ 0.9
+      episode-ok; seed 7 has exactly one collapsed op, func_24 backchain_palindrome
+      (0.28 ok / 0.72 TypeError) — the same bistable single-op flip and the same op as at
+      n=25 from base (§①). Binding structure unchanged at n=50.
 - [ ] N-scaling follow-up: eco-50 with comps scaled to 32k (per-op coverage matched to the
       paper pool) — tests reading 2 directly.
 - [ ] Init variance (issue #9): E-co / v1 on a second RFT-cx-initialised stage-1.5
