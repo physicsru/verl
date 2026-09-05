@@ -659,7 +659,20 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   self-correcting excursion; it does not prevent the excursion. Levers for the excursion
   depth (untested): a larger atomic share or up-weighted atomic groups, a stronger KL, or
   sampling the atomic prompts adversarially (skills whose groups were recently mixed).
-  The gj26 twin `mixg` (3297069) is running as a second seed of this arm.
+
+  **Seed 2 (`mixg`, 3297069, gj26 twin, different rollout rng; DONE 2026-09-06 00:27;
+  `ci_rl_ra_grpo_d7to10_ecoinit_mixg_*.md`):** held-out d8 0.84 → **0.95 (5)** → 0.92 (10)
+  → 0.89 (20) → 0.78 (30) → 0.69 (40) → 0.66 (50) → **0.65 (55-65, TE 0.052)** → 0.80 (70)
+  → **0.87 (75-85, TE 0.018)** → 0.82 (90) → 0.79 (95) → **0.74 (100, TE 0.035)**; d4 0.98
+  → 0.85; d1 ≥ 0.99 throughout; rlops d12 0.61 → 0.96. Same trough as seed 1 (0.64-0.65 at
+  step 55-65) and same recovery (0.87 by step 75-85), then a SECOND drift begins at step
+  90. Two-seed verdict: the mixed pool produces an oscillating, bounded excursion (drift →
+  correction → drift) rather than a stable hold — the restoring force is real (both seeds
+  recover from 0.64 to 0.87 within 15 steps) but at a 1:1 mix it engages late and does not
+  pin the solution. End-of-run d8 0.88 / 0.74 (mean 0.81) vs blind 0.43; trough 0.64 / 0.65
+  in both. Pre-registration (i) "≥ start throughout" fails in both seeds; (iii) pending the
+  per-op sweeps. Next levers unchanged: larger/up-weighted atomic share, stronger KL,
+  adversarial sampling of recently-mixed skills.
 
   **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
   identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
