@@ -719,7 +719,10 @@ number of compositions.
       sweep the step-100 ckpt (per-op table, func_0).
 - [ ] rl-eco-d7to10-k2: 3295454 died at step 2 (Ray `ActorUnavailableError: keepalive
       watchdog timeout` on one worker — infrastructure, same config ran twice before);
-      resubmitted unchanged as 3296770. Then: peak ckpt (step 5/10) per-op sweep.
+      resubmitted unchanged as 3296770 (go39) and, at the user's request, duplicated on gj26 as
+      3297068 (`RL_TAG=ecoinit_k2g`, separate ckpt dir); the mixed-pool arm likewise
+      duplicated as 3297069 (`ecoinit_mixg`). Whichever copy starts first is the result;
+      the twin stays queued unless the user deletes it. Then: peak ckpt (step 5/10) per-op sweep.
 - [x] N-scaling: done 2026-09-05 (table above). Per-op classification of eco-50 on orig12
       (`cls_paper50_eco_orig12.md`): seeds 1 and 123 have all 12 held-out ops ≥ 0.9
       episode-ok; seed 7 has exactly one collapsed op, func_24 backchain_palindrome
