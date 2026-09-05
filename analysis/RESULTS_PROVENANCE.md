@@ -146,6 +146,40 @@ compositions in RA format (one `Recall func_N:` episode per distinct op + `Assem
 
 ---
 
+## STATE OF PLAY (2026-09-05) — read this, then the sections it points to
+
+**Thesis.** Compositional generalisation on this benchmark = (A) a composition procedure
+that is essentially free × (B) a load-robust name→def binding that must be installed per
+skill × (C) serial execution reliability that decays with depth. Nothing measured scales
+with the number of compositions: (A) needs one depth of structurally diverse demos and
+O(n) rows for per-op coverage; (B) needs O(n) atomic practice under load, dose-concave
+(21% of it buys half the gain), name-agnostic, weakly transferable across ops; (C) is
+shared by seen and unseen ops, is not fixable by deeper SFT demos, is lifted by RL for a
+short window and then eroded by the same RL unless every skill is in the reward.
+
+| established (3 seeds unless noted) | numbers | section |
+|---|---|---|
+| E-co recipe (co-occurrence atomics) vs v1 | held-out d4 0.97±0.02 / d8 0.73±0.15 vs 0.53±0.15 / 0.09±0.05 (RFT-cx init) | MAIN RESULT |
+| mechanism = binding collapse under load, per-op bistable | decomposed inference 1.000; 1,102/1,175 chimera bodies from train ops; single-op flips (func_24, func_0) | mechanism docs, §① |
+| frequency is not the lever | C5 0.63±0.12 | C1–C5 |
+| comps not necessary (C1 0.66), structure diversity (C3 0.77 > C2 0.60), depth diversity (C4b 0.90 > C4 0.70), volume neutral (C4 ≈ C3) | | C1–C5 |
+| naming irrelevant | v1 num/alt/alt2 0.52/0.46/0.37; E-co 0.77/0.71/0.76 (from base) | §① |
+| cross-op transfer of robustness weak and late | untreated ops −0.07 / +0.05 / +0.10 at K = 3/6/9 | H0/H1 RESULTS |
+| diversity of composed ops monotone | N = 4/8/13 → 0.55/0.79/0.97 | H0/H1 RESULTS |
+| dose concave | 21/45/66/90% under load → 0.75/0.83/0.91/0.97 | H0/H1 RESULTS |
+| deeper SFT demos hurt | eco_d28 0.63/0.33 vs 0.97/0.73 | C |
+| per-op cost flat at n = 50 | eco-50 on orig12 0.79±0.11 vs 0.77±0.07 at n = 25 (both from base); new 12 ops 0.97±0.03 with zero comp data; deep decay worse with halved per-op comp coverage | N-SCALING |
+| RL on train-op comps (1 seed each) | blind pool: d8 0.84 → 0.94 (step 5-10) → 0.43 (100), cause = func_0 overwritten by neighbours func_1/func_19 (`(s, n)`, `gcd(s, L)`), func_0 in 0/5,893 prompts; mixed pool: 0.84 → 0.94 → 0.64 (65) → 0.88 (100), self-correcting, d1 never moves; entropy is not a stop signal | C |
+
+Open / running: peak-ckpt runs k2 (3296770) / k2g (3297068); mixed-pool seed 2 `mixg`
+(3297069); per-op sweeps of the mixed run at steps 10/50/100 (3298411-13). Not started:
+RFT-E-co (B without labels), second stage-1 init (#9), ③ redone at matched load, n=50
+with 32k comps, mixed-pool dose/KL levers, planning without skeleton. Caveats: every
+paper-pool 3-seed number sits on ONE stage-1.5 init (RFT-cx; from-base ≈ 0.75 instead of
+0.97); issues #1–#10 below.
+
+---
+
 ## MAIN RESULT — E-co vs v1 (the headline, 3 seeds each)
 
 | cell | held-out d2 / d4 / d6 / d8 (mean±sd) | seeds | jobs | ckpts | CI reports |
