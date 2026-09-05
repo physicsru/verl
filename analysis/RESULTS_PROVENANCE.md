@@ -834,8 +834,27 @@ comps) extrapolates to held-out chains of depth 20 at 0.85 with zero omissions �
 gain is real and op-agnostic; (ii) E-co's deep loss is dominated by transcription of the
 given skeleton (91/128 failures at d20), i.e. not a compositional skill; (iii) the mixed
 step-100 model is a train-op specialist (1.00 everywhere) whose held-out loss is binding
-damage on the two arity-2 twins. Defs-only rescoring of these sweeps:
-`rescore_defs_only_deep.md` (pending).
+damage on the two arity-2 twins.
+
+**Defs-only rescoring** (`rescore_defs_only.py`, `rescore_defs_only_deep.md`: the model's Recall
+definitions + the GIVEN skeleton, executed once — removes transcription of the input skeleton,
+which is not a compositional skill; the standard score executes the model's own Assemble copy):
+
+| model / set | grading | d8 | d10 | d12 | d14 | d16 | d18 | **d20** |
+|---|---|---|---|---|---|---|---|---|
+| E-co seed 1 / held-out | standard | 0.92 | 0.87 | 0.78 | 0.73 | 0.68 | 0.55 | 0.50 |
+| | defs-only | 0.94 | 0.94 | 0.85 | 0.90 | 0.82 | 0.79 | **0.83** |
+| RL peak / held-out | standard | 0.95 | 0.95 | 0.93 | 0.89 | 0.86 | 0.81 | 0.85 |
+| | defs-only | 0.97 | 0.97 | 0.94 | 0.94 | 0.91 | 0.90 | **0.94** |
+| mixed step 100 / held-out | standard | 0.85 | 0.76 | 0.73 | 0.73 | 0.60 | 0.61 | 0.60 |
+| | defs-only | 0.88 | 0.80 | 0.76 | 0.78 | 0.65 | 0.67 | 0.65 |
+| E-co seed 1 / train-op | standard | 0.99 | 0.97 | 0.95 | 0.90 | 0.83 | 0.73 | 0.69 |
+| | defs-only | 1.00 | 1.00 | 1.00 | 0.99 | 0.97 | 0.96 | 0.94 |
+
+Two thirds of E-co's d20 loss is skeleton transcription (0.50 → 0.83); the RL peak checkpoint
+under defs-only grading composes 20-deep held-out chains at **0.94** (train-op 0.94 standard);
+the mixed step-100 model gains little (its loss is binding). Remaining held-out deficit at d20
+under defs-only ≈ 6%: TypeError on the arity-2 twins + a few NameErrors → the ecow12 target.
 
 **Next cells (pre-registered 2026-09-06):**
 - **ecow12** (wide E-co; submitted, 3 seeds, tests heldout+trainops+serialho+serialtr): identical to
