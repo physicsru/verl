@@ -670,9 +670,28 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   correction → drift) rather than a stable hold — the restoring force is real (both seeds
   recover from 0.64 to 0.87 within 15 steps) but at a 1:1 mix it engages late and does not
   pin the solution. End-of-run d8 0.88 / 0.74 (mean 0.81) vs blind 0.43; trough 0.64 / 0.65
-  in both. Pre-registration (i) "≥ start throughout" fails in both seeds; (iii) pending the
-  per-op sweeps. Next levers unchanged: larger/up-weighted atomic share, stronger KL,
-  adversarial sampling of recently-mixed skills.
+  in both. Pre-registration (i) "≥ start throughout" fails in both seeds.
+
+  **Per-op sweeps (2026-09-06 00:42; `ci_ckpt_*`/`cls_ckpt_*` for k2g steps 5/10 and mix seed-1
+  steps 10/50/100):** held-out raw acc d1/d4/d8 — blind peak k2g step 5: 0.992/0.973/0.938,
+  step 10: 0.996/0.984/0.941 (every one of the 12 held-out ops ≥ 0.96 episode-ok, func_0
+  0.998/0.997: the peak checkpoint is a strictly better model, no collateral yet); mixed seed 1
+  step 10: 0.992/0.953/0.914, step 50: 0.996/0.871/0.836, step 100: 0.992/0.922/0.879.
+  Per-op episode-ok, the only two ops that ever move:
+
+  | ckpt | E-co init | k2g step 5 | k2g step 10 | blind step 20 | mix step 10 | mix step 50 | mix step 100 | blind step 100 |
+  |---|---|---|---|---|---|---|---|---|
+  | func_0 deterministic_shuffle(s) | 0.998 | 0.998 | 0.997 | 0.774 | 0.948 | 0.995 | **1.000** | 0.029 |
+  | func_6 add_suffix(s, suf) | 0.965 | 0.959 | 0.980 | 1.000 | 0.942 | **0.858** | 0.894 | 0.998 |
+  | other 10 held-out ops | ≥ 0.97 at every checkpoint | | | | | | | |
+
+  Criterion (iii) MET: func_0 = 1.000 at mixed step 100 (depth-1 x_i 1.00 throughout) — the
+  atomic prompts protect exactly the op the blind run destroyed. The mixed run's own trough
+  is a different neighbour: func_6 add_suffix(s, suf), whose train-op twin add_prefix(s, pre)
+  is in the RL pool; it drifts to 0.858 at step 50 and only partly recovers (0.894 at 100).
+  So the collateral is one op at a time, which op depends on the run, and the atomic reward
+  pulls each back with a lag rather than pinning it. Next levers unchanged: larger /
+  up-weighted atomic share, stronger KL, adversarial sampling of recently-mixed skills.
 
   **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
   identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
@@ -789,8 +808,8 @@ number of compositions.
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
 - [x] C: eco_d28 (closed) and rl-eco-d7to10 (diagnosed) written up.
-- [ ] RL fix arm `rl-eco-mix` (3295981): read the 5-step held-out trajectory vs the blind run;
-      sweep the step-100 ckpt (per-op table, func_0).
+- [x] RL fix arm `rl-eco-mix`: 2 seeds + per-op sweeps done (oscillating bounded excursion;
+      func_0 protected, func_6 becomes the moving op).
 - [ ] rl-eco-d7to10-k2: 3295454 died at step 2 (Ray `ActorUnavailableError: keepalive
       watchdog timeout` on one worker — infrastructure, same config ran twice before);
       resubmitted unchanged as 3296770 (go39) and, at the user's request, duplicated on gj26 as
@@ -802,7 +821,8 @@ number of compositions.
       3296770 (go39 twin) = 4th replicate, DONE 23:26: held-out d4/d8 0.98/0.84 → 0.97/0.93 (5)
       → 0.97/0.93 (10) → **0.98/0.95 (15, TE 0.005 — no decline yet)**; rlops d12 0.61 → 0.91;
       `ci_rl_ra_grpo_d7to10_ecoinit_k2_*.md`. Onset of the decline is rng-dependent: run 2
-      had already fallen to 0.73 at step 15, run 4 had not moved.
+      had already fallen to 0.73 at step 15, run 4 had not moved. Per-op sweeps of k2g steps
+      5/10 done: all 12 held-out ops intact (func_0 0.998/0.997), held-out d8 0.938/0.941.
 - [x] N-scaling: done 2026-09-05 (table above). Per-op classification of eco-50 on orig12
       (`cls_paper50_eco_orig12.md`): seeds 1 and 123 have all 12 held-out ops ≥ 0.9
       episode-ok; seed 7 has exactly one collapsed op, func_24 backchain_palindrome
