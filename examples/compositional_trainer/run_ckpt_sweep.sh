@@ -2,7 +2,7 @@
 # Greedy held-out (or other) sweep of ONE checkpoint + CI + failure classification, on a
 # small node count — for diagnosing RL/SFT checkpoints outside the ablation driver.
 #   qsub -p 1023 -W group_list=go39 -N sw-<tag> \
-#        -v CKPT=<huggingface dir>,TAG=<tag>[,POOL=paper][,TEST=heldout|trainops|orig12|new12] \
+#        -v CKPT=<huggingface dir>,TAG=<tag>[,POOL=paper][,TEST=heldout|trainops|orig12|new12|custom,TEST_FILE=<parquet>] \
 #        examples/compositional_trainer/run_ckpt_sweep.sh
 # Outputs: data/compositional/<POOL>/ra_rft/ckpt_sweep_<TAG>_<TEST>_b3072/, analysis/ci_ckpt_<TAG>_<TEST>.md,
 #          analysis/cls_ckpt_<TAG>_<TEST>.md (per-op episode verdicts).
@@ -26,6 +26,7 @@ case "${TEST}" in
     trainops) F="${_BASE}/stage2_level1to8_trainops_codeexec/test.parquet" ;;
     orig12)   F="${PBS_O_WORKDIR}/data/compositional/paper/stage2_level1to8_codeexec/test.parquet" ;;
     new12)    F="${_BASE}/stage2_level1to8_new12_codeexec/test.parquet" ;;
+    custom)   F="${TEST_FILE:?TEST=custom needs TEST_FILE}" ;;
     *) echo "unknown TEST ${TEST}"; exit 1 ;;
 esac
 export CUR_MODEL="${CKPT}" STAGE1_FILE="${F}"
