@@ -554,15 +554,35 @@ eco_init         func_0 signature: {'s': 1250, 's, n': 2} | body: {'gcd/multipli
 rl_eco_step20    func_0 signature: {'s': 1082, 's, n': 174} | body: {'gcd/multiplier': 1256}
 rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body: {'gcd/multiplier': 1256}
   ```
-  i.e. RL on train-op comps sharpened func_5 `add_prefix(s, pre)` (a train op in the RL
-  pool) and func_0 — its name-neighbour attractor already identified in
-  `heldout_failure_mechanism.md` (func_0 → (s, pre) ×148, body from add_prefix) — was pulled
-  into add_prefix's signature and then body, in the weights, until it no longer exists
-  even alone. One op at 0.03 costs d8 0.84 → 0.42 because it appears in ~half of the
-  depth-8 programs. So the "decline" is a single discrete binding overwrite, not diffuse
-  forgetting; the damage was already 22% at step 20, when the depth-1 canary still read
-  1.00 — a depth-1 monitor lags, a 2-3-def canary of each atomically-known skill would
-  have caught it at step 20. Fix arms in OUTSTANDING.
+  **Why RL can corrupt a skill it never scores (verified 2026-09-05):** func_0 appears in
+  **0 of the 5,893 RL prompts** (held-out purity: the pool is compositions of the 10 RL
+  train ops), so the reward is blind to it — a wrong func_0 is never penalised, a right one
+  never reinforced; nothing in the objective defends its binding, and KL 0.01 exerts ≈0.001.
+  The corruption is collateral in weight space, in two forms (same 626 func_0 programs of
+  the held-out sweep, `def func_0` in the Recall episode; the Assemble copy always agrees):
+
+  | checkpoint | correct `(s)` + correct body | spurious 2nd parameter `(s, n)`/`(s, base)` | body slip `gcd(s, L)` for `gcd(multiplier, L)` | other body |
+  |---|---|---|---|---|
+  | E-co init | 625 | 1 | 0 | 0 |
+  | RL step 20 | 490 | 87 | 50 | 5 |
+  | RL step 100 | 22 | 276 | 399 | 207 |
+
+  (categories overlap: at step 100, 70 have both.) The spurious parameter is `n` — the
+  parameter name of func_1 `repeat_str(s, n)` and func_19 `while_rotate(s, n)`, which sit in
+  87% / 86% of the RL prompts and are rewarded in every correct rollout; `def func_0(s, n)`
+  and `def func_1(s, n)` tokenise identically except for one token (`0` vs `1`). The body
+  slip replaces the local `multiplier` by the ubiquitous argument name `s` inside a call —
+  a generic sharpening of the most frequent identifier. At depth 1 (func_0 alone) the
+  signature stays `(s)` but the body slip is 14/14 at step 100, which is why x_i = 0.00.
+  Mechanism: with reward saturated (1.2) and entropy ≈ 0, GRPO's std-normalised advantages
+  keep pushing probability onto the model's own correct train-op rollouts (+0.35 each in a
+  7-vs-1 group) — self-distillation on train-op programs, the same anti-generalisation as
+  RFT / stage15b / eco_d28, delivered through RL; the token-nearest undefended neighbour
+  absorbs the drift first. One op at 0.03 costs d8 0.84 → 0.42 because it appears in
+  ~half of the depth-8 programs. The damage was already 22% at step 20 while the depth-1
+  canary still read 1.00 — a depth-1 monitor lags; a 2-3-def canary of every atomically
+  known skill would have caught it. Fix arms in OUTSTANDING (put every skill into the
+  reward: mix all-op multi-task atomic prompts into the RL pool).
 
   **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
   identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
