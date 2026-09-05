@@ -581,8 +581,24 @@ rl_eco_step100   func_0 signature: {'s': 704, 's, n': 548, 's, base': 4} | body:
   absorbs the drift first. One op at 0.03 costs d8 0.84 → 0.42 because it appears in
   ~half of the depth-8 programs. The damage was already 22% at step 20 while the depth-1
   canary still read 1.00 — a depth-1 monitor lags; a 2-3-def canary of every atomically
-  known skill would have caught it. Fix arms in OUTSTANDING (put every skill into the
-  reward: mix all-op multi-task atomic prompts into the RL pool).
+  known skill would have caught it. Fix arm below.
+
+  **Fix arm — mixed pool (submitted 2026-09-05, job 3295981, `rl-eco-mix`,
+  `rl_ra_grpo_d7to10_ecoinit_mix_qwen3_4b`):** same init / KL 0.01 / 100 steps as the
+  declining run, but the RL pool is `train_d7to10_mixatomic_ecoinit/train.parquet` =
+  the 5,893 prefiltered train-op d7-10 comps + 5,893 multi-task ATOMIC prompts over all
+  25 ops (widths 1-4, uniform, sampled from `structured/pool_w14d`, seed 1; held-out ops
+  appear only as atomic tasks — held-out purity kept). Reward schema verified identical
+  across both row kinds after the parquet round-trip. TEST_FREQ 5, SAVE_FREQ 10, keep-all
+  (62 GB/ckpt). Rationale: make the reward non-blind — a func_0 written with `(s, n)` or
+  `gcd(s, L)` in an atomic prompt now scores 0 inside a GRPO group, so the drift creates
+  its own restoring gradient exactly when it starts; while nothing drifts, atomic groups
+  are all-correct (advantage 0) and cost nothing but batch share (half the batch).
+  Pre-registered: (i) held-out d4/d8 stays ≥ the E-co start (0.98/0.84) through 100 steps,
+  vs 0.77/0.43 in the blind run; (ii) rlops d12 still rises (0.62 → ≥ 0.9); (iii) func_0
+  episode-ok ≥ 0.95 at step 100 in the ckpt sweep. If (i) fails while (ii) holds → the
+  collateral is not fixable by the reward alone at KL 0.01 → KL / LR arms. If (ii) fails →
+  the atomic half starves the composition objective → change the mix ratio.
 
   **Keep-all rerun (3292270, `rl_ra_grpo_d7to10_ecoinit_k_qwen3_4b`, 30 steps, SAVE=TEST=5,
   identical config, different rollout rng; `ci_rl_ra_grpo_d7to10_ecoinit_k_*.md`):**
@@ -698,7 +714,10 @@ number of compositions.
 - [x] ① name ablation, matched: done 2026-09-03 (refuted, all 3 seeds × 3 schemes
       × {v1, eco}); classification in `cls_name_ablation_*.md`.
 - [x] H0/H1 cells: all 27 done and written up ("H0/H1 RESULTS", 2026-09-03 20:22).
-- [ ] C: read eco_d28 ×3 and rl-eco-d7to10 (3290812) when done; fill the C table.
+- [x] C: eco_d28 (closed) and rl-eco-d7to10 (diagnosed) written up.
+- [ ] RL fix arm `rl-eco-mix` (3295981): read the 5-step held-out trajectory vs the blind run;
+      sweep the step-100 ckpt (per-op table, func_0).
+- [ ] rl-eco-d7to10-k2 (3295454): peak ckpt (step 5/10) per-op sweep.
 - [x] N-scaling: done 2026-09-05 (table above). Per-op classification of eco-50 on orig12
       (`cls_paper50_eco_orig12.md`): seeds 1 and 123 have all 12 held-out ops ≥ 0.9
       episode-ok; seed 7 has exactly one collapsed op, func_24 backchain_palindrome
